@@ -2,20 +2,20 @@
  * Apple HTTP Live Streaming Protocol Handler
  * Copyright (c) 2010 Martin Storsjo
  *
- * This file is part of FFmpeg.
+ * This file is part of Libav.
  *
- * FFmpeg is free software; you can redistribute it and/or
+ * Libav is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
  * version 2.1 of the License, or (at your option) any later version.
  *
- * FFmpeg is distributed in the hope that it will be useful,
+ * Libav is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with FFmpeg; if not, write to the Free Software
+ * License along with Libav; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
@@ -29,6 +29,7 @@
 #include "libavutil/avstring.h"
 #include "avformat.h"
 #include "internal.h"
+#include "url.h"
 #include <unistd.h>
 
 /*
@@ -114,7 +115,7 @@ static int parse_playlist(URLContext *h, const char *url)
     char line[1024];
     const char *ptr;
 
-    if ((ret = avio_open(&in, url, URL_RDONLY)) < 0)
+    if ((ret = avio_open(&in, url, AVIO_FLAG_READ)) < 0)
         return ret;
 
     read_chomp_line(in, line, sizeof(line));
@@ -179,8 +180,8 @@ static int applehttp_open(URLContext *h, const char *uri, int flags)
     int ret, i;
     const char *nested_url;
 
-    if (flags & (URL_WRONLY | URL_RDWR))
-        return AVERROR_NOTSUPP;
+    if (flags & AVIO_FLAG_WRITE)
+        return AVERROR(ENOSYS);
 
     s = av_mallocz(sizeof(AppleHTTPContext));
     if (!s)
@@ -194,7 +195,7 @@ static int applehttp_open(URLContext *h, const char *uri, int flags)
         av_strlcpy(s->playlisturl, "http://", sizeof(s->playlisturl));
         av_strlcat(s->playlisturl, nested_url, sizeof(s->playlisturl));
     } else {
-        av_log(NULL, AV_LOG_ERROR, "Unsupported url %s\n", uri);
+        av_log(h, AV_LOG_ERROR, "Unsupported url %s\n", uri);
         ret = AVERROR(EINVAL);
         goto fail;
     }
@@ -217,7 +218,7 @@ static int applehttp_open(URLContext *h, const char *uri, int flags)
     }
 
     if (s->n_segments == 0) {
-        av_log(NULL, AV_LOG_WARNING, "Empty playlist\n");
+        av_log(h, AV_LOG_WARNING, "Empty playlist\n");
         ret = AVERROR(EIO);
         goto fail;
     }
@@ -240,12 +241,12 @@ static int applehttp_read(URLContext *h, uint8_t *buf, int size)
 
 start:
     if (s->seg_hd) {
-        ret = url_read(s->seg_hd, buf, size);
+        ret = ffurl_read(s->seg_hd, buf, size);
         if (ret > 0)
             return ret;
     }
     if (s->seg_hd) {
-        url_close(s->seg_hd);
+        ffurl_close(s->seg_hd);
         s->seg_hd = NULL;
         s->cur_seq_no++;
     }
@@ -257,7 +258,7 @@ retry:
                 return ret;
     }
     if (s->cur_seq_no < s->start_seq_no) {
-        av_log(NULL, AV_LOG_WARNING,
+        av_log(h, AV_LOG_WARNING,
                "skipping %d segments ahead, expired from playlist\n",
                s->start_seq_no - s->cur_seq_no);
         s->cur_seq_no = s->start_seq_no;
@@ -273,12 +274,12 @@ retry:
         goto retry;
     }
     url = s->segments[s->cur_seq_no - s->start_seq_no]->url,
-    av_log(NULL, AV_LOG_DEBUG, "opening %s\n", url);
-    ret = url_open(&s->seg_hd, url, URL_RDONLY);
+    av_log(h, AV_LOG_DEBUG, "opening %s\n", url);
+    ret = ffurl_open(&s->seg_hd, url, AVIO_FLAG_READ);
     if (ret < 0) {
         if (url_interrupt_cb())
             return AVERROR_EXIT;
-        av_log(NULL, AV_LOG_WARNING, "Unable to open %s\n", url);
+        av_log(h, AV_LOG_WARNING, "Unable to open %s\n", url);
         s->cur_seq_no++;
         goto retry;
     }
@@ -291,17 +292,15 @@ static int applehttp_close(URLContext *h)
 
     free_segment_list(s);
     free_variant_list(s);
-    url_close(s->seg_hd);
+    ffurl_close(s->seg_hd);
     av_free(s);
     return 0;
 }
 
 URLProtocol ff_applehttp_protocol = {
-    "applehttp",
-    applehttp_open,
-    applehttp_read,
-    NULL, /* write */
-    NULL, /* seek */
-    applehttp_close,
-    .flags = URL_PROTOCOL_FLAG_NESTED_SCHEME,
+    .name      = "applehttp",
+    .url_open  = applehttp_open,
+    .url_read  = applehttp_read,
+    .url_close = applehttp_close,
+    .flags     = URL_PROTOCOL_FLAG_NESTED_SCHEME,
 };

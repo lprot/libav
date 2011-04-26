@@ -2,20 +2,20 @@
  * AC-3 DSP utils
  * Copyright (c) 2011 Justin Ruggles
  *
- * This file is part of FFmpeg.
+ * This file is part of Libav.
  *
- * FFmpeg is free software; you can redistribute it and/or
+ * Libav is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
  * version 2.1 of the License, or (at your option) any later version.
  *
- * FFmpeg is distributed in the hope that it will be useful,
+ * Libav is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with FFmpeg; if not, write to the Free Software
+ * License along with Libav; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
@@ -68,9 +68,49 @@ typedef struct AC3DSPContext {
      *               constraints: range [0,31]
      */
     void (*ac3_rshift_int32)(int32_t *src, unsigned int len, unsigned int shift);
+
+    /**
+     * Convert an array of float in range [-1.0,1.0] to int32_t with range
+     * [-(1<<24),(1<<24)]
+     *
+     * @param dst destination array of int32_t.
+     *            constraints: 16-byte aligned
+     * @param src source array of float.
+     *            constraints: 16-byte aligned
+     * @param len number of elements to convert.
+     *            constraints: multiple of 32 greater than zero
+     */
+    void (*float_to_fixed24)(int32_t *dst, const float *src, unsigned int len);
+
+    /**
+     * Calculate bit allocation pointers.
+     * The SNR is the difference between the masking curve and the signal.  AC-3
+     * uses this value for each frequency bin to allocate bits.  The snroffset
+     * parameter is a global adjustment to the SNR for all bins.
+     *
+     * @param[in]  mask       masking curve
+     * @param[in]  psd        signal power for each frequency bin
+     * @param[in]  start      starting bin location
+     * @param[in]  end        ending bin location
+     * @param[in]  snr_offset SNR adjustment
+     * @param[in]  floor      noise floor
+     * @param[in]  bap_tab    look-up table for bit allocation pointers
+     * @param[out] bap        bit allocation pointers
+     */
+    void (*bit_alloc_calc_bap)(int16_t *mask, int16_t *psd, int start, int end,
+                               int snr_offset, int floor,
+                               const uint8_t *bap_tab, uint8_t *bap);
+
+    /**
+     * Calculate the number of bits needed to encode a set of mantissas.
+     */
+    int (*compute_mantissa_size)(int mant_cnt[5], uint8_t *bap, int nb_coefs);
+
+    void (*extract_exponents)(uint8_t *exp, int32_t *coef, int nb_coefs);
 } AC3DSPContext;
 
-void ff_ac3dsp_init    (AC3DSPContext *c);
-void ff_ac3dsp_init_x86(AC3DSPContext *c);
+void ff_ac3dsp_init    (AC3DSPContext *c, int bit_exact);
+void ff_ac3dsp_init_arm(AC3DSPContext *c, int bit_exact);
+void ff_ac3dsp_init_x86(AC3DSPContext *c, int bit_exact);
 
 #endif /* AVCODEC_AC3DSP_H */

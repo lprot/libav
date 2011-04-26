@@ -2,20 +2,20 @@
  * MOV, 3GP, MP4 muxer RTP hinting
  * Copyright (c) 2010 Martin Storsjo
  *
- * This file is part of FFmpeg.
+ * This file is part of Libav.
  *
- * FFmpeg is free software; you can redistribute it and/or
+ * Libav is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
  * version 2.1 of the License, or (at your option) any later version.
  *
- * FFmpeg is distributed in the hope that it will be useful,
+ * Libav is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with FFmpeg; if not, write to the Free Software
+ * License along with Libav; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
@@ -23,6 +23,7 @@
 #include "libavutil/intreadwrite.h"
 #include "internal.h"
 #include "rtpenc_chain.h"
+#include "avio_internal.h"
 
 int ff_mov_init_hinting(AVFormatContext *s, int index, int src_index)
 {
@@ -408,8 +409,8 @@ int ff_mov_add_hinted_packet(AVFormatContext *s, AVPacket *pkt,
 
     /* Fetch the output from the RTP muxer, open a new output buffer
      * for next time. */
-    size = url_close_dyn_buf(rtp_ctx->pb, &buf);
-    if ((ret = url_open_dyn_packet_buf(&rtp_ctx->pb,
+    size = avio_close_dyn_buf(rtp_ctx->pb, &buf);
+    if ((ret = ffio_open_dyn_packet_buf(&rtp_ctx->pb,
                                        RTP_MAX_PACKET_SIZE)) < 0)
         goto done;
 
@@ -417,14 +418,14 @@ int ff_mov_add_hinted_packet(AVFormatContext *s, AVPacket *pkt,
         goto done;
 
     /* Open a buffer for writing the hint */
-    if ((ret = url_open_dyn_buf(&hintbuf)) < 0)
+    if ((ret = avio_open_dyn_buf(&hintbuf)) < 0)
         goto done;
     av_init_packet(&hint_pkt);
     count = write_hint_packets(hintbuf, buf, size, trk, &hint_pkt.dts);
     av_freep(&buf);
 
     /* Write the hint data into the hint track */
-    hint_pkt.size = size = url_close_dyn_buf(hintbuf, &buf);
+    hint_pkt.size = size = avio_close_dyn_buf(hintbuf, &buf);
     hint_pkt.data = buf;
     hint_pkt.pts  = hint_pkt.dts;
     hint_pkt.stream_index = track_index;
@@ -448,7 +449,7 @@ void ff_mov_close_hinting(MOVTrack *track) {
         return;
     if (rtp_ctx->pb) {
         av_write_trailer(rtp_ctx);
-        url_close_dyn_buf(rtp_ctx->pb, &ptr);
+        avio_close_dyn_buf(rtp_ctx->pb, &ptr);
         av_free(ptr);
     }
     avformat_free_context(rtp_ctx);

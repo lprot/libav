@@ -2,20 +2,20 @@
  * AAC coefficients encoder
  * Copyright (C) 2008-2009 Konstantin Shishkov
  *
- * This file is part of FFmpeg.
+ * This file is part of Libav.
  *
- * FFmpeg is free software; you can redistribute it and/or
+ * Libav is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
  * version 2.1 of the License, or (at your option) any later version.
  *
- * FFmpeg is distributed in the hope that it will be useful,
+ * Libav is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with FFmpeg; if not, write to the Free Software
+ * License along with Libav; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
@@ -36,6 +36,7 @@
 #include "aac.h"
 #include "aacenc.h"
 #include "aactab.h"
+#include "libavutil/libm.h"
 
 /** bits needed to code codebook run value for long windows */
 static const uint8_t run_value_bits_long[64] = {
@@ -110,7 +111,7 @@ static av_always_inline float quantize_and_encode_band_cost_template(
     const float IQ = ff_aac_pow2sf_tab[200 + scale_idx - SCALE_ONE_POS + SCALE_DIV_512];
     const float  Q = ff_aac_pow2sf_tab[200 - scale_idx + SCALE_ONE_POS - SCALE_DIV_512];
     const float CLIPPED_ESCAPE = 165140.0f*IQ;
-    int i, j, k;
+    int i, j;
     float cost = 0;
     const int dim = BT_PAIR ? 2 : 4;
     int resbits = 0;
@@ -149,10 +150,10 @@ static av_always_inline float quantize_and_encode_band_cost_template(
         curbits =  ff_aac_spectral_bits[cb-1][curidx];
         vec     = &ff_aac_codebook_vectors[cb-1][curidx*dim];
         if (BT_UNSIGNED) {
-            for (k = 0; k < dim; k++) {
-                float t = fabsf(in[i+k]);
+            for (j = 0; j < dim; j++) {
+                float t = fabsf(in[i+j]);
                 float di;
-                if (BT_ESC && vec[k] == 64.0f) { //FIXME: slow
+                if (BT_ESC && vec[j] == 64.0f) { //FIXME: slow
                     if (t >= CLIPPED_ESCAPE) {
                         di = t - CLIPPED_ESCAPE;
                         curbits += 21;
@@ -162,15 +163,15 @@ static av_always_inline float quantize_and_encode_band_cost_template(
                         curbits += av_log2(c)*2 - 4 + 1;
                     }
                 } else {
-                    di = t - vec[k]*IQ;
+                    di = t - vec[j]*IQ;
                 }
-                if (vec[k] != 0.0f)
+                if (vec[j] != 0.0f)
                     curbits++;
                 rd += di*di;
             }
         } else {
-            for (k = 0; k < dim; k++) {
-                float di = in[i+k] - vec[k]*IQ;
+            for (j = 0; j < dim; j++) {
+                float di = in[i+j] - vec[j]*IQ;
                 rd += di*di;
             }
         }
@@ -817,7 +818,7 @@ static void search_for_quantizers_twoloop(AVCodecContext *avctx,
                 int prevsc = sce->sf_idx[w*16+g];
                 if (dists[w*16+g] > uplims[w*16+g] && sce->sf_idx[w*16+g] > 60) {
                     if (find_min_book(maxvals[w*16+g], sce->sf_idx[w*16+g]-1))
-                    sce->sf_idx[w*16+g]--;
+                        sce->sf_idx[w*16+g]--;
                     else //Try to make sure there is some energy in every band
                         sce->sf_idx[w*16+g]-=2;
                 }
@@ -1057,7 +1058,7 @@ static void search_for_ms(AACEncContext *s, ChannelElement *cpe,
                     for (i = 0; i < sce0->ics.swb_sizes[g]; i++) {
                         M[i] = (sce0->coeffs[start+w2*128+i]
                               + sce1->coeffs[start+w2*128+i]) * 0.5;
-                        S[i] =  sce0->coeffs[start+w2*128+i]
+                        S[i] =  M[i]
                               - sce1->coeffs[start+w2*128+i];
                     }
                     abs_pow34_v(L34, sce0->coeffs+start+w2*128, sce0->ics.swb_sizes[g]);

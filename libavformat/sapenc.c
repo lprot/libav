@@ -2,20 +2,20 @@
  * Session Announcement Protocol (RFC 2974) muxer
  * Copyright (c) 2010 Martin Storsjo
  *
- * This file is part of FFmpeg.
+ * This file is part of Libav.
  *
- * FFmpeg is free software; you can redistribute it and/or
+ * Libav is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
  * version 2.1 of the License, or (at your option) any later version.
  *
- * FFmpeg is distributed in the hope that it will be useful,
+ * Libav is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with FFmpeg; if not, write to the Free Software
+ * License along with Libav; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
@@ -28,6 +28,7 @@
 #include "network.h"
 #include "os_support.h"
 #include "rtpenc_chain.h"
+#include "url.h"
 
 struct SAPState {
     uint8_t    *ann;
@@ -53,12 +54,12 @@ static int sap_write_close(AVFormatContext *s)
 
     if (sap->last_time && sap->ann && sap->ann_fd) {
         sap->ann[0] |= 4; /* Session deletion*/
-        url_write(sap->ann_fd, sap->ann, sap->ann_size);
+        ffurl_write(sap->ann_fd, sap->ann, sap->ann_size);
     }
 
     av_freep(&sap->ann);
     if (sap->ann_fd)
-        url_close(sap->ann_fd);
+        ffurl_close(sap->ann_fd);
     ff_network_close();
     return 0;
 }
@@ -145,7 +146,7 @@ static int sap_write_header(AVFormatContext *s)
                     "?ttl=%d", ttl);
         if (!same_port)
             base_port += 2;
-        ret = url_open(&fd, url, URL_WRONLY);
+        ret = ffurl_open(&fd, url, AVIO_FLAG_WRITE);
         if (ret) {
             ret = AVERROR(EIO);
             goto fail;
@@ -157,13 +158,13 @@ static int sap_write_header(AVFormatContext *s)
 
     ff_url_join(url, sizeof(url), "udp", NULL, announce_addr, port,
                 "?ttl=%d&connect=1", ttl);
-    ret = url_open(&sap->ann_fd, url, URL_WRONLY);
+    ret = ffurl_open(&sap->ann_fd, url, AVIO_FLAG_WRITE);
     if (ret) {
         ret = AVERROR(EIO);
         goto fail;
     }
 
-    udp_fd = url_get_file_handle(sap->ann_fd);
+    udp_fd = ffurl_get_file_handle(sap->ann_fd);
     if (getsockname(udp_fd, (struct sockaddr*) &localaddr, &addrlen)) {
         ret = AVERROR(EIO);
         goto fail;
@@ -207,7 +208,7 @@ static int sap_write_header(AVFormatContext *s)
     av_strlcpy(&sap->ann[pos], "application/sdp", sap->ann_size - pos);
     pos += strlen(&sap->ann[pos]) + 1;
 
-    if (avf_sdp_create(contexts, s->nb_streams, &sap->ann[pos],
+    if (av_sdp_create(contexts, s->nb_streams, &sap->ann[pos],
                        sap->ann_size - pos)) {
         ret = AVERROR_INVALIDDATA;
         goto fail;
@@ -217,7 +218,7 @@ static int sap_write_header(AVFormatContext *s)
     pos += strlen(&sap->ann[pos]);
     sap->ann_size = pos;
 
-    if (sap->ann_size > url_get_max_packet_size(sap->ann_fd)) {
+    if (sap->ann_size > sap->ann_fd->max_packet_size) {
         av_log(s, AV_LOG_ERROR, "Announcement too large to send in one "
                                 "packet\n");
         goto fail;
@@ -238,7 +239,7 @@ static int sap_write_packet(AVFormatContext *s, AVPacket *pkt)
     int64_t now = av_gettime();
 
     if (!sap->last_time || now - sap->last_time > 5000000) {
-        int ret = url_write(sap->ann_fd, sap->ann, sap->ann_size);
+        int ret = ffurl_write(sap->ann_fd, sap->ann, sap->ann_size);
         /* Don't abort even if we get "Destination unreachable" */
         if (ret < 0 && ret != AVERROR(ECONNREFUSED))
             return ret;

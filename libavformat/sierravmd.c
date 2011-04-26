@@ -2,20 +2,20 @@
  * Sierra VMD Format Demuxer
  * Copyright (c) 2004 The ffmpeg Project
  *
- * This file is part of FFmpeg.
+ * This file is part of Libav.
  *
- * FFmpeg is free software; you can redistribute it and/or
+ * Libav is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
  * version 2.1 of the License, or (at your option) any later version.
  *
- * FFmpeg is distributed in the hope that it will be useful,
+ * Libav is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with FFmpeg; if not, write to the Free Software
+ * License along with Libav; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
@@ -99,7 +99,7 @@ static int vmd_read_header(AVFormatContext *s,
     if (avio_read(pb, vmd->vmd_header, VMD_HEADER_SIZE) != VMD_HEADER_SIZE)
         return AVERROR(EIO);
 
-    if(vmd->vmd_header[16] == 'i' && vmd->vmd_header[17] == 'v' && vmd->vmd_header[18] == '3')
+    if(vmd->vmd_header[24] == 'i' && vmd->vmd_header[25] == 'v' && vmd->vmd_header[26] == '3')
         vmd->is_indeo3 = 1;
     else
         vmd->is_indeo3 = 0;
@@ -249,7 +249,7 @@ static int vmd_read_packet(AVFormatContext *s,
         return AVERROR(ENOMEM);
     pkt->pos= avio_tell(pb);
     memcpy(pkt->data, frame->frame_record, BYTES_PER_FRAME_RECORD);
-    if(vmd->is_indeo3)
+    if(vmd->is_indeo3 && frame->frame_record[0] == 0x02)
         ret = avio_read(pb, pkt->data, frame->frame_size);
     else
         ret = avio_read(pb, pkt->data + BYTES_PER_FRAME_RECORD,

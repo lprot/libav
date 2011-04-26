@@ -5,20 +5,20 @@
  *
  * 4MV & hq & B-frame encoding stuff by Michael Niedermayer <michaelni@gmx.at>
  *
- * This file is part of FFmpeg.
+ * This file is part of Libav.
  *
- * FFmpeg is free software; you can redistribute it and/or
+ * Libav is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
  * version 2.1 of the License, or (at your option) any later version.
  *
- * FFmpeg is distributed in the hope that it will be useful,
+ * Libav is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with FFmpeg; if not, write to the Free Software
+ * License along with Libav; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
@@ -1025,7 +1025,6 @@ int MPV_frame_start(MpegEncContext *s, AVCodecContext *avctx)
         }
     }
 
-    s->hurry_up= s->avctx->hurry_up;
     s->error_recognition= avctx->error_recognition;
 
     /* set dequantizer, we can't do it during init as it might change for mpeg4
@@ -1067,9 +1066,15 @@ void MPV_frame_end(MpegEncContext *s)
        && s->current_picture.reference
        && !s->intra_only
        && !(s->flags&CODEC_FLAG_EMU_EDGE)) {
-            s->dsp.draw_edges(s->current_picture.data[0], s->linesize  , s->h_edge_pos   , s->v_edge_pos   , EDGE_WIDTH  );
-            s->dsp.draw_edges(s->current_picture.data[1], s->uvlinesize, s->h_edge_pos>>1, s->v_edge_pos>>1, EDGE_WIDTH/2);
-            s->dsp.draw_edges(s->current_picture.data[2], s->uvlinesize, s->h_edge_pos>>1, s->v_edge_pos>>1, EDGE_WIDTH/2);
+            s->dsp.draw_edges(s->current_picture.data[0], s->linesize  ,
+                              s->h_edge_pos   , s->v_edge_pos   ,
+                              EDGE_WIDTH  , EDGE_TOP | EDGE_BOTTOM);
+            s->dsp.draw_edges(s->current_picture.data[1], s->uvlinesize,
+                              s->h_edge_pos>>1, s->v_edge_pos>>1,
+                              EDGE_WIDTH/2, EDGE_TOP | EDGE_BOTTOM);
+            s->dsp.draw_edges(s->current_picture.data[2], s->uvlinesize,
+                              s->h_edge_pos>>1, s->v_edge_pos>>1,
+                              EDGE_WIDTH/2, EDGE_TOP | EDGE_BOTTOM);
     }
     emms_c();
 
@@ -1956,7 +1961,6 @@ void MPV_decode_mb_internal(MpegEncContext *s, DCTELEM block[12][64],
             }
 
             /* skip dequant / idct if we are really late ;) */
-            if(s->hurry_up>1) goto skip_idct;
             if(s->avctx->skip_idct){
                 if(  (s->avctx->skip_idct >= AVDISCARD_NONREF && s->pict_type == FF_B_TYPE)
                    ||(s->avctx->skip_idct >= AVDISCARD_NONKEY && s->pict_type != FF_I_TYPE)

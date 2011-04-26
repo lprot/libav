@@ -1,20 +1,20 @@
 /*
- * Copyright (c) 2003 The FFmpeg Project
+ * Copyright (c) 2003 The Libav Project
  *
- * This file is part of FFmpeg.
+ * This file is part of Libav.
  *
- * FFmpeg is free software; you can redistribute it and/or
+ * Libav is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
  * version 2.1 of the License, or (at your option) any later version.
  *
- * FFmpeg is distributed in the hope that it will be useful,
+ * Libav is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with FFmpeg; if not, write to the Free Software
+ * License along with Libav; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
@@ -37,7 +37,7 @@
  *
  * You will know you have these parameters passed correctly when the decoder
  * correctly decodes this file:
- *  http://samples.mplayerhq.hu/V-codecs/SVQ3/Vertical400kbit.sorenson3.mov
+ *  http://samples.libav.org/V-codecs/SVQ3/Vertical400kbit.sorenson3.mov
  */
 #include "internal.h"
 #include "dsputil.h"
@@ -945,18 +945,12 @@ static int svq3_decode_frame(AVCodecContext *avctx,
                s->adaptive_quant, s->qscale, h->slice_num);
     }
 
-    /* for hurry_up == 5 */
+    /* for skipping the frame */
     s->current_picture.pict_type = s->pict_type;
     s->current_picture.key_frame = (s->pict_type == FF_I_TYPE);
 
     /* Skip B-frames if we do not have reference frames. */
     if (s->last_picture_ptr == NULL && s->pict_type == FF_B_TYPE)
-        return 0;
-    /* Skip B-frames if we are in a hurry. */
-    if (avctx->hurry_up && s->pict_type == FF_B_TYPE)
-        return 0;
-    /* Skip everything if we are in a hurry >= 5. */
-    if (avctx->hurry_up >= 5)
         return 0;
     if (  (avctx->skip_frame >= AVDISCARD_NONREF && s->pict_type == FF_B_TYPE)
         ||(avctx->skip_frame >= AVDISCARD_NONKEY && s->pict_type != FF_I_TYPE)

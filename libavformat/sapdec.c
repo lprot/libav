@@ -2,20 +2,20 @@
  * Session Announcement Protocol (RFC 2974) demuxer
  * Copyright (c) 2010 Martin Storsjo
  *
- * This file is part of FFmpeg.
+ * This file is part of Libav.
  *
- * FFmpeg is free software; you can redistribute it and/or
+ * Libav is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
  * version 2.1 of the License, or (at your option) any later version.
  *
- * FFmpeg is distributed in the hope that it will be useful,
+ * Libav is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with FFmpeg; if not, write to the Free Software
+ * License along with Libav; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
@@ -26,6 +26,7 @@
 #include "os_support.h"
 #include "internal.h"
 #include "avio_internal.h"
+#include "url.h"
 #if HAVE_POLL_H
 #include <poll.h>
 #endif
@@ -53,7 +54,7 @@ static int sap_read_close(AVFormatContext *s)
     if (sap->sdp_ctx)
         av_close_input_stream(sap->sdp_ctx);
     if (sap->ann_fd)
-        url_close(sap->ann_fd);
+        ffurl_close(sap->ann_fd);
     av_freep(&sap->sdp);
     ff_network_close();
     return 0;
@@ -84,7 +85,7 @@ static int sap_read_header(AVFormatContext *s,
 
     ff_url_join(url, sizeof(url), "udp", NULL, host, port, "?localport=%d",
                 port);
-    ret = url_open(&sap->ann_fd, url, URL_RDONLY);
+    ret = ffurl_open(&sap->ann_fd, url, AVIO_FLAG_READ);
     if (ret)
         goto fail;
 
@@ -92,7 +93,7 @@ static int sap_read_header(AVFormatContext *s,
         int addr_type, auth_len;
         int pos;
 
-        ret = url_read(sap->ann_fd, recvbuf, sizeof(recvbuf) - 1);
+        ret = ffurl_read(sap->ann_fd, recvbuf, sizeof(recvbuf) - 1);
         if (ret == AVERROR(EAGAIN))
             continue;
         if (ret < 0)
@@ -182,7 +183,7 @@ fail:
 static int sap_fetch_packet(AVFormatContext *s, AVPacket *pkt)
 {
     struct SAPState *sap = s->priv_data;
-    int fd = url_get_file_handle(sap->ann_fd);
+    int fd = ffurl_get_file_handle(sap->ann_fd);
     int n, ret;
     struct pollfd p = {fd, POLLIN, 0};
     uint8_t recvbuf[1500];
@@ -194,7 +195,7 @@ static int sap_fetch_packet(AVFormatContext *s, AVPacket *pkt)
         n = poll(&p, 1, 0);
         if (n <= 0 || !(p.revents & POLLIN))
             break;
-        ret = url_read(sap->ann_fd, recvbuf, sizeof(recvbuf));
+        ret = ffurl_read(sap->ann_fd, recvbuf, sizeof(recvbuf));
         if (ret >= 8) {
             uint16_t hash = AV_RB16(&recvbuf[2]);
             /* Should ideally check the source IP address, too */

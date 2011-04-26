@@ -2,20 +2,20 @@
  * FLAC audio encoder
  * Copyright (c) 2006  Justin Ruggles <justin.ruggles@gmail.com>
  *
- * This file is part of FFmpeg.
+ * This file is part of Libav.
  *
- * FFmpeg is free software; you can redistribute it and/or
+ * Libav is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
  * version 2.1 of the License, or (at your option) any later version.
  *
- * FFmpeg is distributed in the hope that it will be useful,
+ * Libav is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with FFmpeg; if not, write to the Free Software
+ * License along with Libav; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
@@ -285,17 +285,6 @@ static av_cold int flac_encode_init(AVCodecContext *avctx)
     s->options.max_partition_order = ((int[]){  2,  2,  3,  3,  3,  8,  8,  8,  8,  8,  8,  8,  8})[level];
 
     /* set compression option overrides from AVCodecContext */
-#if FF_API_USE_LPC
-    /* for compatibility with deprecated AVCodecContext.use_lpc */
-    if (avctx->use_lpc == 0) {
-        s->options.lpc_type = AV_LPC_TYPE_FIXED;
-    } else if (avctx->use_lpc == 1) {
-        s->options.lpc_type = AV_LPC_TYPE_LEVINSON;
-    } else if (avctx->use_lpc > 1) {
-        s->options.lpc_type   = AV_LPC_TYPE_CHOLESKY;
-        s->options.lpc_passes = avctx->use_lpc - 1;
-    }
-#endif
     if (avctx->lpc_type > AV_LPC_TYPE_DEFAULT) {
         if (avctx->lpc_type > AV_LPC_TYPE_CHOLESKY) {
             av_log(avctx, AV_LOG_ERROR, "unknown lpc type: %d\n", avctx->lpc_type);

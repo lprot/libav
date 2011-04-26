@@ -2,20 +2,20 @@
  * pixel format descriptor
  * Copyright (c) 2009 Michael Niedermayer <michaelni@gmx.at>
  *
- * This file is part of FFmpeg.
+ * This file is part of Libav.
  *
- * FFmpeg is free software; you can redistribute it and/or
+ * Libav is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
  * version 2.1 of the License, or (at your option) any later version.
  *
- * FFmpeg is distributed in the hope that it will be useful,
+ * Libav is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with FFmpeg; if not, write to the Free Software
+ * License along with Libav; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
@@ -628,6 +628,29 @@ const AVPixFmtDescriptor av_pix_fmt_descriptors[PIX_FMT_NB] = {
             {0,1,2,0,3},        /* R */
             {0,1,1,4,3},        /* G */
             {0,1,1,0,3},        /* B */
+        },
+    },
+    [PIX_FMT_BGR48BE] = {
+        .name = "bgr48be",
+        .nb_components= 3,
+        .log2_chroma_w= 0,
+        .log2_chroma_h= 0,
+        .comp = {
+            {0,5,1,0,15},       /* B */
+            {0,5,3,0,15},       /* G */
+            {0,5,5,0,15},       /* R */
+        },
+        .flags = PIX_FMT_BE,
+    },
+    [PIX_FMT_BGR48LE] = {
+        .name = "bgr48le",
+        .nb_components= 3,
+        .log2_chroma_w= 0,
+        .log2_chroma_h= 0,
+        .comp = {
+            {0,5,1,0,15},       /* B */
+            {0,5,3,0,15},       /* G */
+            {0,5,5,0,15},       /* R */
         },
     },
     [PIX_FMT_BGR565BE] = {

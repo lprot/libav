@@ -3,20 +3,20 @@
  * Copyright (c) 2000, 2001, 2002 Fabrice Bellard
  * Copyright (c) 2004 Michael Niedermayer
  *
- * This file is part of FFmpeg.
+ * This file is part of Libav.
  *
- * FFmpeg is free software; you can redistribute it and/or
+ * Libav is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
  * version 2.1 of the License, or (at your option) any later version.
  *
- * FFmpeg is distributed in the hope that it will be useful,
+ * Libav is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with FFmpeg; if not, write to the Free Software
+ * License along with Libav; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
@@ -24,6 +24,7 @@
 #include "libavutil/avstring.h"
 #include "avformat.h"
 #include "avio_internal.h"
+#include "internal.h"
 #include <strings.h>
 
 typedef struct {
@@ -130,11 +131,11 @@ static int find_image_range(int *pfirst_index, int *plast_index,
         if (av_get_frame_filename(buf, sizeof(buf), path, first_index) < 0){
             *pfirst_index =
             *plast_index = 1;
-            if(url_exist(buf))
+            if (avio_check(buf, AVIO_FLAG_READ) > 0)
                 return 0;
             return -1;
         }
-        if (url_exist(buf))
+        if (avio_check(buf, AVIO_FLAG_READ) > 0)
             break;
     }
     if (first_index == 5)
@@ -152,7 +153,7 @@ static int find_image_range(int *pfirst_index, int *plast_index,
             if (av_get_frame_filename(buf, sizeof(buf), path,
                                       last_index + range1) < 0)
                 goto fail;
-            if (!url_exist(buf))
+            if (avio_check(buf, AVIO_FLAG_READ) <= 0)
                 break;
             range = range1;
             /* just in case... */
@@ -183,9 +184,16 @@ static int read_probe(AVProbeData *p)
     return 0;
 }
 
+enum CodecID ff_guess_image2_codec(const char *filename)
+{
+    return av_str2id(img_tags, filename);
+}
+
+#if FF_API_GUESS_IMG2_CODEC
 enum CodecID av_guess_image2_codec(const char *filename){
     return av_str2id(img_tags, filename);
 }
+#endif
 
 static int read_header(AVFormatContext *s1, AVFormatParameters *ap)
 {
@@ -270,7 +278,7 @@ static int read_packet(AVFormatContext *s1, AVPacket *pkt)
                                   s->path, s->img_number)<0 && s->img_number > 1)
             return AVERROR(EIO);
         for(i=0; i<3; i++){
-            if (avio_open(&f[i], filename, URL_RDONLY) < 0) {
+            if (avio_open(&f[i], filename, AVIO_FLAG_READ) < 0) {
                 if(i==1)
                     break;
                 av_log(s1, AV_LOG_ERROR, "Could not open file : %s\n",filename);
@@ -354,7 +362,7 @@ static int write_packet(AVFormatContext *s, AVPacket *pkt)
             return AVERROR(EIO);
         }
         for(i=0; i<3; i++){
-            if (avio_open(&pb[i], filename, URL_WRONLY) < 0) {
+            if (avio_open(&pb[i], filename, AVIO_FLAG_WRITE) < 0) {
                 av_log(s, AV_LOG_ERROR, "Could not open file : %s\n",filename);
                 return AVERROR(EIO);
             }

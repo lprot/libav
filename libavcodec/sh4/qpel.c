@@ -4,20 +4,20 @@
  *
  * copyright (c) 2001-2003 BERO <bero@geocities.co.jp>
  *
- * This file is part of FFmpeg.
+ * This file is part of Libav.
  *
- * FFmpeg is free software; you can redistribute it and/or
+ * Libav is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
  * version 2.1 of the License, or (at your option) any later version.
  *
- * FFmpeg is distributed in the hope that it will be useful,
+ * Libav is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with FFmpeg; if not, write to the Free Software
+ * License along with Libav; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
@@ -897,7 +897,6 @@ QPEL_MC(0, avg_       , _       , op_avg)
 #undef op_put
 #undef op_put_no_rnd
 
-#if 1
 #define H264_LOWPASS(OPNAME, OP, OP2) \
 static inline void OPNAME ## h264_qpel_h_lowpass(uint8_t *dst, uint8_t *src, int dstStride, int srcStride,int w,int h){\
     uint8_t *cm = ff_cropTbl + MAX_NEG_CROP;\
@@ -1298,7 +1297,6 @@ H264_MC(avg_, 16)
 #undef op_put
 #undef op2_avg
 #undef op2_put
-#endif
 
 static void wmv2_mspel8_h_lowpass(uint8_t *dst, uint8_t *src, int dstStride, int srcStride, int h){
     uint8_t *cm = ff_cropTbl + MAX_NEG_CROP;

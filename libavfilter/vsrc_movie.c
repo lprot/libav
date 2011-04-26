@@ -2,20 +2,20 @@
  * Copyright (c) 2010 Stefano Sabatini
  * Copyright (c) 2008 Victor Paesa
  *
- * This file is part of FFmpeg.
+ * This file is part of Libav.
  *
- * FFmpeg is free software; you can redistribute it and/or
+ * Libav is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
  * version 2.1 of the License, or (at your option) any later version.
  *
- * FFmpeg is distributed in the hope that it will be useful,
+ * Libav is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with FFmpeg; if not, write to the Free Software
+ * License along with Libav; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
@@ -252,6 +252,8 @@ static int movie_get_frame(AVFilterLink *outlink)
                     st->sample_aspect_ratio : movie->codec_ctx->sample_aspect_ratio;
                 movie->picref->video->interlaced      = movie->frame->interlaced_frame;
                 movie->picref->video->top_field_first = movie->frame->top_field_first;
+                movie->picref->video->key_frame       = movie->frame->key_frame;
+                movie->picref->video->pict_type       = movie->frame->pict_type;
                 av_dlog(outlink->src,
                         "movie_get_frame(): file:'%s' pts:%"PRId64" time:%lf pos:%"PRId64" aspect:%d/%d\n",
                         movie->file_name, movie->picref->pts,
@@ -290,6 +292,8 @@ static int request_frame(AVFilterLink *outlink)
     avfilter_start_frame(outlink, outpicref);
     avfilter_draw_slice(outlink, 0, outlink->h, 1);
     avfilter_end_frame(outlink);
+    avfilter_unref_buffer(movie->picref);
+    movie->picref = NULL;
 
     return 0;
 }

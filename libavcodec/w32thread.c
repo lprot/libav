@@ -1,20 +1,20 @@
 /*
  * Copyright (c) 2004 Michael Niedermayer <michaelni@gmx.at>
  *
- * This file is part of FFmpeg.
+ * This file is part of Libav.
  *
- * FFmpeg is free software; you can redistribute it and/or
+ * Libav is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
  * version 2.1 of the License, or (at your option) any later version.
  *
- * FFmpeg is distributed in the hope that it will be useful,
+ * Libav is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with FFmpeg; if not, write to the Free Software
+ * License along with Libav; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 //#define DEBUG
@@ -125,7 +125,7 @@ static int avcodec_thread_execute2(AVCodecContext *s, int (*func)(AVCodecContext
     avcodec_thread_execute(s, NULL, arg, ret, count, 0);
 }
 
-int ff_thread_init(AVCodecContext *s, int thread_count){
+int ff_thread_init(AVCodecContext *s){
     int i;
     ThreadContext *c;
     uint32_t threadid;
@@ -135,14 +135,13 @@ int ff_thread_init(AVCodecContext *s, int thread_count){
         return 0;
     }
 
-    s->thread_count= thread_count;
     s->active_thread_type= FF_THREAD_SLICE;
 
-    if (thread_count <= 1)
+    if (s->thread_count <= 1)
         return 0;
 
     assert(!s->thread_opaque);
-    c= av_mallocz(sizeof(ThreadContext)*thread_count);
+    c= av_mallocz(sizeof(ThreadContext)*s->thread_count);
     s->thread_opaque= c;
     if(!(c[0].work_sem = CreateSemaphore(NULL, 0, INT_MAX, NULL)))
         goto fail;
@@ -151,7 +150,7 @@ int ff_thread_init(AVCodecContext *s, int thread_count){
     if(!(c[0].done_sem = CreateSemaphore(NULL, 0, INT_MAX, NULL)))
         goto fail;
 
-    for(i=0; i<thread_count; i++){
+    for(i=0; i<s->thread_count; i++){
 //printf("init semaphors %d\n", i); fflush(stdout);
         c[i].avctx= s;
         c[i].work_sem = c[0].work_sem;

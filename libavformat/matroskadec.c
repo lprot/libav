@@ -1,21 +1,21 @@
 /*
  * Matroska file demuxer
- * Copyright (c) 2003-2008 The FFmpeg Project
+ * Copyright (c) 2003-2008 The Libav Project
  *
- * This file is part of FFmpeg.
+ * This file is part of Libav.
  *
- * FFmpeg is free software; you can redistribute it and/or
+ * Libav is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
  * version 2.1 of the License, or (at your option) any later version.
  *
- * FFmpeg is distributed in the hope that it will be useful,
+ * Libav is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with FFmpeg; if not, write to the Free Software
+ * License along with Libav; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
@@ -1117,7 +1117,7 @@ static void matroska_execute_seekhead(MatroskaDemuxContext *matroska)
     int i;
 
     // we should not do any seeking in the streaming case
-    if (url_is_streamed(matroska->ctx->pb) ||
+    if (!matroska->ctx->pb->seekable ||
         (matroska->ctx->flags & AVFMT_FLAG_IGNIDX))
         return;
 
@@ -1329,9 +1329,12 @@ static int matroska_read_header(AVFormatContext *s, AVFormatParameters *ap)
         } else if (!strcmp(track->codec_id, "A_MS/ACM")
                    && track->codec_priv.size >= 14
                    && track->codec_priv.data != NULL) {
+            int ret;
             ffio_init_context(&b, track->codec_priv.data, track->codec_priv.size,
-                          URL_RDONLY, NULL, NULL, NULL, NULL);
-            ff_get_wav_header(&b, st->codec, track->codec_priv.size);
+                          AVIO_FLAG_READ, NULL, NULL, NULL, NULL);
+            ret = ff_get_wav_header(&b, st->codec, track->codec_priv.size);
+            if (ret < 0)
+                return ret;
             codec_id = st->codec->codec_id;
             extradata_offset = FFMIN(track->codec_priv.size, 18);
         } else if (!strcmp(track->codec_id, "V_QUICKTIME")
@@ -1852,6 +1855,8 @@ static int matroska_parse_cluster(MatroskaDemuxContext *matroska)
     for (i=0; i<blocks_list->nb_elem; i++)
         if (blocks[i].bin.size > 0 && blocks[i].bin.data) {
             int is_keyframe = blocks[i].non_simple ? !blocks[i].reference : -1;
+            if (!blocks[i].non_simple)
+                blocks[i].duration = AV_NOPTS_VALUE;
             res=matroska_parse_block(matroska,
                                      blocks[i].bin.data, blocks[i].bin.size,
                                      blocks[i].bin.pos,  cluster.timecode,

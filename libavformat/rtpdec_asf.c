@@ -2,20 +2,20 @@
  * Microsoft RTP/ASF support.
  * Copyright (c) 2008 Ronald S. Bultje
  *
- * This file is part of FFmpeg.
+ * This file is part of Libav.
  *
- * FFmpeg is free software; you can redistribute it and/or
+ * Libav is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
  * version 2.1 of the License, or (at your option) any later version.
  *
- * FFmpeg is distributed in the hope that it will be useful,
+ * Libav is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with FFmpeg; if not, write to the Free Software
+ * License along with Libav; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
@@ -203,12 +203,12 @@ static int asfrtp_parse_packet(AVFormatContext *s, PayloadContext *asf,
                  */
                 if (asf->pktbuf && len_off != avio_tell(asf->pktbuf)) {
                     uint8_t *p;
-                    url_close_dyn_buf(asf->pktbuf, &p);
+                    avio_close_dyn_buf(asf->pktbuf, &p);
                     asf->pktbuf = NULL;
                     av_free(p);
                 }
                 if (!len_off && !asf->pktbuf &&
-                    (res = url_open_dyn_buf(&asf->pktbuf)) < 0)
+                    (res = avio_open_dyn_buf(&asf->pktbuf)) < 0)
                     return res;
                 if (!asf->pktbuf)
                     return AVERROR(EIO);
@@ -217,7 +217,7 @@ static int asfrtp_parse_packet(AVFormatContext *s, PayloadContext *asf,
                 avio_skip(pb, len - off);
                 if (!(flags & RTP_FLAG_MARKER))
                     return -1;
-                out_len     = url_close_dyn_buf(asf->pktbuf, &asf->buf);
+                out_len     = avio_close_dyn_buf(asf->pktbuf, &asf->buf);
                 asf->pktbuf = NULL;
             } else {
                 /**
@@ -272,7 +272,7 @@ static void asfrtp_free_context(PayloadContext *asf)
 {
     if (asf->pktbuf) {
         uint8_t *p = NULL;
-        url_close_dyn_buf(asf->pktbuf, &p);
+        avio_close_dyn_buf(asf->pktbuf, &p);
         asf->pktbuf = NULL;
         av_free(p);
     }
@@ -286,8 +286,8 @@ RTPDynamicProtocolHandler ff_ms_rtp_ ## n ## _handler = { \
     .codec_type       = t, \
     .codec_id         = CODEC_ID_NONE, \
     .parse_sdp_a_line = asfrtp_parse_sdp_line, \
-    .open             = asfrtp_new_context, \
-    .close            = asfrtp_free_context, \
+    .alloc            = asfrtp_new_context, \
+    .free             = asfrtp_free_context, \
     .parse_packet     = asfrtp_parse_packet,   \
 }
 

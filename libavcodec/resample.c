@@ -2,20 +2,20 @@
  * samplerate conversion for both audio and video
  * Copyright (c) 2000 Fabrice Bellard
  *
- * This file is part of FFmpeg.
+ * This file is part of Libav.
  *
- * FFmpeg is free software; you can redistribute it and/or
+ * Libav is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
  * version 2.1 of the License, or (at your option) any later version.
  *
- * FFmpeg is distributed in the hope that it will be useful,
+ * Libav is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with FFmpeg; if not, write to the Free Software
+ * License along with Libav; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
@@ -217,17 +217,6 @@ ReSampleContext *av_audio_resample_init(int output_channels, int input_channels,
 
     return s;
 }
-
-#if FF_API_AUDIO_OLD
-ReSampleContext *audio_resample_init(int output_channels, int input_channels,
-                                     int output_rate, int input_rate)
-{
-    return av_audio_resample_init(output_channels, input_channels,
-                                  output_rate, input_rate,
-                                  AV_SAMPLE_FMT_S16, AV_SAMPLE_FMT_S16,
-                                  TAPS, 10, 0, 0.8);
-}
-#endif
 
 /* resample audio. 'nb_samples' is the number of input samples */
 /* XXX: optimize it ! */

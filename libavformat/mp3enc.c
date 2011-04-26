@@ -2,20 +2,20 @@
  * MP3 muxer
  * Copyright (c) 2003 Fabrice Bellard
  *
- * This file is part of FFmpeg.
+ * This file is part of Libav.
  *
- * FFmpeg is free software; you can redistribute it and/or
+ * Libav is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
  * version 2.1 of the License, or (at your option) any later version.
  *
- * FFmpeg is distributed in the hope that it will be useful,
+ * Libav is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with FFmpeg; if not, write to the Free Software
+ * License along with Libav; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
@@ -96,7 +96,7 @@ static int id3v2_put_ttag(AVFormatContext *s, const char *str1, const char *str2
     uint8_t *pb;
     int (*put)(AVIOContext*, const char*);
     AVIOContext *dyn_buf;
-    if (url_open_dyn_buf(&dyn_buf) < 0)
+    if (avio_open_dyn_buf(&dyn_buf) < 0)
         return AVERROR(ENOMEM);
 
     /* check if the strings are ASCII-only and use UTF16 only if
@@ -115,7 +115,7 @@ static int id3v2_put_ttag(AVFormatContext *s, const char *str1, const char *str2
     put(dyn_buf, str1);
     if (str2)
         put(dyn_buf, str2);
-    len = url_close_dyn_buf(dyn_buf, &pb);
+    len = avio_close_dyn_buf(dyn_buf, &pb);
 
     avio_wb32(s->pb, tag);
     id3v2_put_size(s, len);

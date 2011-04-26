@@ -3,20 +3,20 @@
  * Copyright (c) 2009 Colin McQuillian
  * Copyright (c) 2010 Josh Allmann
  *
- * This file is part of FFmpeg.
+ * This file is part of Libav.
  *
- * FFmpeg is free software; you can redistribute it and/or
+ * Libav is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
  * version 2.1 of the License, or (at your option) any later version.
  *
- * FFmpeg is distributed in the hope that it will be useful,
+ * Libav is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with FFmpeg; if not, write to the Free Software
+ * License along with Libav; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
@@ -57,7 +57,7 @@ static inline void free_fragment_if_needed(PayloadContext * data)
 {
     if (data->fragment) {
         uint8_t* p;
-        url_close_dyn_buf(data->fragment, &p);
+        avio_close_dyn_buf(data->fragment, &p);
         av_free(p);
         data->fragment = NULL;
     }
@@ -176,7 +176,7 @@ static int xiph_handle_packet(AVFormatContext * ctx,
         // end packet has been lost somewhere, so drop buffered data
         free_fragment_if_needed(data);
 
-        if((res = url_open_dyn_buf(&data->fragment)) < 0)
+        if((res = avio_open_dyn_buf(&data->fragment)) < 0)
             return res;
 
         avio_write(data->fragment, buf, pkt_len);
@@ -203,7 +203,7 @@ static int xiph_handle_packet(AVFormatContext * ctx,
         if (fragmented == 3) {
             // end of xiph data packet
             av_init_packet(pkt);
-            pkt->size = url_close_dyn_buf(data->fragment, &pkt->data);
+            pkt->size = avio_close_dyn_buf(data->fragment, &pkt->data);
 
             if (pkt->size < 0) {
                 av_log(ctx, AV_LOG_ERROR,
@@ -389,8 +389,8 @@ RTPDynamicProtocolHandler ff_theora_dynamic_handler = {
     .codec_type       = AVMEDIA_TYPE_VIDEO,
     .codec_id         = CODEC_ID_THEORA,
     .parse_sdp_a_line = xiph_parse_sdp_line,
-    .open             = xiph_new_context,
-    .close            = xiph_free_context,
+    .alloc            = xiph_new_context,
+    .free             = xiph_free_context,
     .parse_packet     = xiph_handle_packet
 };
 
@@ -399,7 +399,7 @@ RTPDynamicProtocolHandler ff_vorbis_dynamic_handler = {
     .codec_type       = AVMEDIA_TYPE_AUDIO,
     .codec_id         = CODEC_ID_VORBIS,
     .parse_sdp_a_line = xiph_parse_sdp_line,
-    .open             = xiph_new_context,
-    .close            = xiph_free_context,
+    .alloc            = xiph_new_context,
+    .free             = xiph_free_context,
     .parse_packet     = xiph_handle_packet
 };

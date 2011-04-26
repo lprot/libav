@@ -1,21 +1,21 @@
 /*
- * FFplay : Simple Media Player based on the FFmpeg libraries
+ * ffplay : Simple Media Player based on the Libav libraries
  * Copyright (c) 2003 Fabrice Bellard
  *
- * This file is part of FFmpeg.
+ * This file is part of Libav.
  *
- * FFmpeg is free software; you can redistribute it and/or
+ * Libav is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
  * version 2.1 of the License, or (at your option) any later version.
  *
- * FFmpeg is distributed in the hope that it will be useful,
+ * Libav is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with FFmpeg; if not, write to the Free Software
+ * License along with Libav; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
@@ -35,7 +35,7 @@
 #include "libavdevice/avdevice.h"
 #include "libswscale/swscale.h"
 #include "libavcodec/audioconvert.h"
-#include "libavcodec/opt.h"
+#include "libavutil/opt.h"
 #include "libavcodec/avfft.h"
 
 #if CONFIG_AVFILTER
@@ -55,7 +55,7 @@
 #include <unistd.h>
 #include <assert.h>
 
-const char program_name[] = "FFplay";
+const char program_name[] = "ffplay";
 const int program_birth_year = 2003;
 
 //#define DEBUG
@@ -2393,7 +2393,7 @@ static int decode_thread(void *arg)
     is->subtitle_stream = -1;
 
     global_video_state = is;
-    url_set_interrupt_cb(decode_interrupt_cb);
+    avio_set_interrupt_cb(decode_interrupt_cb);
 
     memset(ap, 0, sizeof(*ap));
 
@@ -2568,9 +2568,9 @@ static int decode_thread(void *arg)
         }
         ret = av_read_frame(ic, pkt);
         if (ret < 0) {
-            if (ret == AVERROR_EOF || ic->pb->eof_reached)
+            if (ret == AVERROR_EOF || (ic->pb && ic->pb->eof_reached))
                 eof=1;
-            if (ic->pb->error)
+            if (ic->pb && ic->pb->error)
                 break;
             SDL_Delay(100); /* wait for user event */
             continue;
@@ -2612,7 +2612,7 @@ static int decode_thread(void *arg)
         av_close_input_file(is->ic);
         is->ic = NULL; /* safety */
     }
-    url_set_interrupt_cb(NULL);
+    avio_set_interrupt_cb(NULL);
 
     if (ret != 0) {
         SDL_Event event;

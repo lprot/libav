@@ -2,20 +2,20 @@
  * WavPack demuxer
  * Copyright (c) 2006,2011 Konstantin Shishkov
  *
- * This file is part of FFmpeg.
+ * This file is part of Libav.
  *
- * FFmpeg is free software; you can redistribute it and/or
+ * Libav is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
  * version 2.1 of the License, or (at your option) any later version.
  *
- * FFmpeg is distributed in the hope that it will be useful,
+ * Libav is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with FFmpeg; if not, write to the Free Software
+ * License along with Libav; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
@@ -121,7 +121,7 @@ static int wv_read_block_header(AVFormatContext *ctx, AVIOContext *pb, int appen
     }
     if((rate == -1 || !chan) && !wc->block_parsed){
         int64_t block_end = avio_tell(pb) + wc->blksize - 24;
-        if(url_is_streamed(pb)){
+        if(!pb->seekable){
             av_log(ctx, AV_LOG_ERROR, "Cannot determine additional parameters\n");
             return -1;
         }
@@ -223,7 +223,7 @@ static int wv_read_header(AVFormatContext *s,
     st->start_time = 0;
     st->duration = wc->samples;
 
-    if(!url_is_streamed(s->pb)) {
+    if(s->pb->seekable) {
         int64_t cur = avio_tell(s->pb);
         ff_ape_parse_tag(s);
         if(!av_metadata_get(s->metadata, "", NULL, AV_METADATA_IGNORE_SUFFIX))

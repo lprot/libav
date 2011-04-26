@@ -2,20 +2,20 @@
  * (c) 2001 Fabrice Bellard
  *     2007 Marc Hoffman <marc.hoffman@analog.com>
  *
- * This file is part of FFmpeg.
+ * This file is part of Libav.
  *
- * FFmpeg is free software; you can redistribute it and/or
+ * Libav is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
  * version 2.1 of the License, or (at your option) any later version.
  *
- * FFmpeg is distributed in the hope that it will be useful,
+ * Libav is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with FFmpeg; if not, write to the Free Software
+ * License along with Libav; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
@@ -312,18 +312,16 @@ static void dct_error(const char *name, int is_idct,
     }
     for(i=0; i<64; i++) sysErrMax= FFMAX(sysErrMax, FFABS(sysErr[i]));
 
-#if 1 // dump systematic errors
     for(i=0; i<64; i++){
         if(i%8==0) printf("\n");
         printf("%7d ", (int)sysErr[i]);
     }
     printf("\n");
-#endif
 
     printf("%s %s: err_inf=%d err2=%0.8f syserr=%0.8f maxout=%d blockSumErr=%d\n",
            is_idct ? "IDCT" : "DCT",
            name, err_inf, (double)err2 / NB_ITS / 64.0, (double)sysErrMax / NB_ITS, maxout, blockSumErrMax);
-#if 1 //Speed test
+
     /* speed test */
     for(i=0;i<64;i++)
         block1[i] = 0;
@@ -376,7 +374,6 @@ static void dct_error(const char *name, int is_idct,
     printf("%s %s: %0.1f kdct/s\n",
            is_idct ? "IDCT" : "DCT",
            name, (double)it1 * 1000.0 / (double)ti1);
-#endif
 }
 
 DECLARE_ALIGNED(8, static uint8_t, img_dest)[64];

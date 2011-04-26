@@ -3,20 +3,20 @@
  * Copyright (c) 2003 Sascha Sommer
  * Copyright (c) 2005 Benjamin Larsson
  *
- * This file is part of FFmpeg.
+ * This file is part of Libav.
  *
- * FFmpeg is free software; you can redistribute it and/or
+ * Libav is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
  * version 2.1 of the License, or (at your option) any later version.
  *
- * FFmpeg is distributed in the hope that it will be useful,
+ * Libav is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with FFmpeg; if not, write to the Free Software
+ * License along with Libav; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
@@ -54,6 +54,7 @@
 #include "bytestream.h"
 #include "fft.h"
 #include "libavutil/audioconvert.h"
+#include "sinewin.h"
 
 #include "cookdata.h"
 
@@ -152,7 +153,7 @@ typedef struct cook {
     /* data buffers */
 
     uint8_t*            decoded_bytes_buffer;
-    DECLARE_ALIGNED(16, float,mono_mdct_output)[2048];
+    DECLARE_ALIGNED(32, float, mono_mdct_output)[2048];
     float               decode_buffer_1[1024];
     float               decode_buffer_2[1024];
     float               decode_buffer_0[1060]; /* static allocation for joint decode */
@@ -753,7 +754,7 @@ static void imlt_gain(COOKContext *q, float *inbuffer,
     int i;
 
     /* Inverse modified discrete cosine transform */
-    ff_imdct_calc(&q->mdct_ctx, q->mono_mdct_output, inbuffer);
+    q->mdct_ctx.imdct_calc(&q->mdct_ctx, q->mono_mdct_output, inbuffer);
 
     q->imlt_window (q, buffer1, gains_ptr, previous_buffer);
 
@@ -1135,7 +1136,7 @@ static av_cold int cook_decode_init(AVCodecContext *avctx)
         switch (q->subpacket[s].cookversion) {
             case MONO:
                 if (q->nb_channels != 1) {
-                    av_log(avctx,AV_LOG_ERROR,"Container channels != 1, report sample!\n");
+                    av_log_ask_for_sample(avctx, "Container channels != 1.\n");
                     return -1;
                 }
                 av_log(avctx,AV_LOG_DEBUG,"MONO\n");
@@ -1149,7 +1150,7 @@ static av_cold int cook_decode_init(AVCodecContext *avctx)
                 break;
             case JOINT_STEREO:
                 if (q->nb_channels != 2) {
-                    av_log(avctx,AV_LOG_ERROR,"Container channels != 2, report sample!\n");
+                    av_log_ask_for_sample(avctx, "Container channels != 2.\n");
                     return -1;
                 }
                 av_log(avctx,AV_LOG_DEBUG,"JOINT_STEREO\n");
@@ -1187,7 +1188,7 @@ static av_cold int cook_decode_init(AVCodecContext *avctx)
 
                 break;
             default:
-                av_log(avctx,AV_LOG_ERROR,"Unknown Cook version, report sample!\n");
+                av_log_ask_for_sample(avctx, "Unknown Cook version.\n");
                 return -1;
                 break;
         }
@@ -1204,7 +1205,7 @@ static av_cold int cook_decode_init(AVCodecContext *avctx)
 
         /* Try to catch some obviously faulty streams, othervise it might be exploitable */
         if (q->subpacket[s].total_subbands > 53) {
-            av_log(avctx,AV_LOG_ERROR,"total_subbands > 53, report sample!\n");
+            av_log_ask_for_sample(avctx, "total_subbands > 53\n");
             return -1;
         }
 
@@ -1214,7 +1215,7 @@ static av_cold int cook_decode_init(AVCodecContext *avctx)
         }
 
         if (q->subpacket[s].subbands > 50) {
-            av_log(avctx,AV_LOG_ERROR,"subbands > 50, report sample!\n");
+            av_log_ask_for_sample(avctx, "subbands > 50\n");
             return -1;
         }
         q->subpacket[s].gains1.now      = q->subpacket[s].gain_1;
@@ -1225,7 +1226,7 @@ static av_cold int cook_decode_init(AVCodecContext *avctx)
         q->num_subpackets++;
         s++;
         if (s > MAX_SUBPACKETS) {
-            av_log(avctx,AV_LOG_ERROR,"Too many subpackets > 5, report file!\n");
+            av_log_ask_for_sample(avctx, "Too many subpackets > 5\n");
             return -1;
         }
     }
@@ -1267,7 +1268,9 @@ static av_cold int cook_decode_init(AVCodecContext *avctx)
     /* Try to catch some obviously faulty streams, othervise it might be exploitable */
     if ((q->samples_per_channel == 256) || (q->samples_per_channel == 512) || (q->samples_per_channel == 1024)) {
     } else {
-        av_log(avctx,AV_LOG_ERROR,"unknown amount of samples_per_channel = %d, report sample!\n",q->samples_per_channel);
+        av_log_ask_for_sample(avctx,
+                              "unknown amount of samples_per_channel = %d\n",
+                              q->samples_per_channel);
         return -1;
     }
 

@@ -1,26 +1,26 @@
 /*
  * FLV demuxer
- * Copyright (c) 2003 The FFmpeg Project
+ * Copyright (c) 2003 The Libav Project
  *
  * This demuxer will generate a 1 byte extradata for VP6F content.
  * It is composed of:
  *  - upper 4bits: difference between encoded width and visible width
  *  - lower 4bits: difference between encoded height and visible height
  *
- * This file is part of FFmpeg.
+ * This file is part of Libav.
  *
- * FFmpeg is free software; you can redistribute it and/or
+ * Libav is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
  * version 2.1 of the License, or (at your option) any later version.
  *
- * FFmpeg is distributed in the hope that it will be useful,
+ * Libav is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with FFmpeg; if not, write to the Free Software
+ * License along with Libav; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
@@ -28,7 +28,12 @@
 #include "libavcodec/bytestream.h"
 #include "libavcodec/mpeg4audio.h"
 #include "avformat.h"
+#include "avio_internal.h"
 #include "flv.h"
+
+#define KEYFRAMES_TAG            "keyframes"
+#define KEYFRAMES_TIMESTAMP_TAG  "times"
+#define KEYFRAMES_BYTEOFFSET_TAG "filepositions"
 
 typedef struct {
     int wrong_dts; ///< wrong dts due to negative cts
@@ -124,6 +129,74 @@ static int amf_get_string(AVIOContext *ioc, char *buffer, int buffsize) {
     return length;
 }
 
+static int parse_keyframes_index(AVFormatContext *s, AVIOContext *ioc, AVStream *vstream, int64_t max_pos) {
+    unsigned int arraylen = 0, timeslen = 0, fileposlen = 0, i;
+    double num_val;
+    char str_val[256];
+    int64_t *times = NULL;
+    int64_t *filepositions = NULL;
+    int ret = AVERROR(ENOSYS);
+    int64_t initial_pos = avio_tell(ioc);
+
+    while (avio_tell(ioc) < max_pos - 2 && amf_get_string(ioc, str_val, sizeof(str_val)) > 0) {
+        int64_t* current_array;
+
+        // Expect array object in context
+        if (avio_r8(ioc) != AMF_DATA_TYPE_ARRAY)
+            break;
+
+        arraylen = avio_rb32(ioc);
+        /*
+         * Expect only 'times' or 'filepositions' sub-arrays in other case refuse to use such metadata
+         * for indexing
+         */
+        if (!strcmp(KEYFRAMES_TIMESTAMP_TAG, str_val) && !times) {
+            if (!(times = av_mallocz(sizeof(*times) * arraylen))) {
+                ret = AVERROR(ENOMEM);
+                goto finish;
+            }
+            timeslen = arraylen;
+            current_array = times;
+        } else if (!strcmp(KEYFRAMES_BYTEOFFSET_TAG, str_val) && !filepositions) {
+            if (!(filepositions = av_mallocz(sizeof(*filepositions) * arraylen))) {
+                ret = AVERROR(ENOMEM);
+                goto finish;
+            }
+            fileposlen = arraylen;
+            current_array = filepositions;
+        } else // unexpected metatag inside keyframes, will not use such metadata for indexing
+            break;
+
+        for (i = 0; i < arraylen && avio_tell(ioc) < max_pos - 1; i++) {
+            if (avio_r8(ioc) != AMF_DATA_TYPE_NUMBER)
+                goto finish;
+            num_val = av_int2dbl(avio_rb64(ioc));
+            current_array[i] = num_val;
+        }
+        if (times && filepositions) {
+            // All done, exiting at a position allowing amf_parse_object
+            // to finish parsing the object
+            ret = 0;
+            break;
+        }
+    }
+
+    if (timeslen == fileposlen)
+         for(i = 0; i < arraylen; i++)
+             av_add_index_entry(vstream, filepositions[i], times[i]*1000, 0, 0, AVINDEX_KEYFRAME);
+    else
+        av_log(s, AV_LOG_WARNING, "Invalid keyframes object, skipping.\n");
+
+finish:
+    av_freep(&times);
+    av_freep(&filepositions);
+    // If we got unexpected data, but successfully reset back to
+    // the start pos, the caller can continue parsing
+    if (ret < 0 && avio_seek(ioc, initial_pos, SEEK_SET) > 0)
+        return 0;
+    return ret;
+}
+
 static int amf_parse_object(AVFormatContext *s, AVStream *astream, AVStream *vstream, const char *key, int64_t max_pos, int depth) {
     AVCodecContext *acodec, *vcodec;
     AVIOContext *ioc;
@@ -147,6 +220,10 @@ static int amf_parse_object(AVFormatContext *s, AVStream *astream, AVStream *vst
             break;
         case AMF_DATA_TYPE_OBJECT: {
             unsigned int keylen;
+
+            if (key && !strcmp(KEYFRAMES_TAG, key) && depth == 1)
+                if (parse_keyframes_index(s, ioc, vstream, max_pos) < 0)
+                    return -1;
 
             while(avio_tell(ioc) < max_pos - 2 && (keylen = avio_rb16(ioc))) {
                 avio_skip(ioc, keylen); //skip key string
@@ -370,7 +447,7 @@ static int flv_read_packet(AVFormatContext *s, AVPacket *pkt)
  }
 
     // if not streamed and no duration from metadata then seek to end to find the duration from the timestamps
-    if(!url_is_streamed(s->pb) && (!s->duration || s->duration==AV_NOPTS_VALUE)){
+    if(s->pb->seekable && (!s->duration || s->duration==AV_NOPTS_VALUE)){
         int size;
         const int64_t pos= avio_tell(s->pb);
         const int64_t fsize= avio_size(s->pb);
@@ -461,7 +538,7 @@ leave:
 static int flv_read_seek(AVFormatContext *s, int stream_index,
     int64_t ts, int flags)
 {
-    return av_url_read_fseek(s->pb, stream_index, ts, flags);
+    return avio_seek_time(s->pb, stream_index, ts, flags);
 }
 
 #if 0 /* don't know enough to implement this */
@@ -472,7 +549,7 @@ static int flv_read_seek2(AVFormatContext *s, int stream_index,
 
     if (ts - min_ts > (uint64_t)(max_ts - ts)) flags |= AVSEEK_FLAG_BACKWARD;
 
-    if (url_is_streamed(s->pb)) {
+    if (!s->pb->seekable) {
         if (stream_index < 0) {
             stream_index = av_find_default_stream_index(s);
             if (stream_index < 0)
@@ -482,7 +559,7 @@ static int flv_read_seek2(AVFormatContext *s, int stream_index,
             ts = av_rescale_rnd(ts, 1000, AV_TIME_BASE,
                 flags & AVSEEK_FLAG_BACKWARD ? AV_ROUND_DOWN : AV_ROUND_UP);
         }
-        ret = av_url_read_fseek(s->pb, stream_index, ts, flags);
+        ret = avio_seek_time(s->pb, stream_index, ts, flags);
     }
 
     if (ret == AVERROR(ENOSYS))

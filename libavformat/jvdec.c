@@ -2,20 +2,20 @@
  * Bitmap Brothers JV demuxer
  * Copyright (c) 2005, 2011 Peter Ross <pross@xvid.org>
  *
- * This file is part of FFmpeg.
+ * This file is part of Libav.
  *
- * FFmpeg is free software; you can redistribute it and/or
+ * Libav is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
  * version 2.1 of the License, or (at your option) any later version.
  *
- * FFmpeg is distributed in the hope that it will be useful,
+ * Libav is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with FFmpeg; if not, write to the Free Software
+ * License along with Libav; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
@@ -74,7 +74,7 @@ static int read_header(AVFormatContext *s,
     if (!ast || !vst)
         return AVERROR(ENOMEM);
 
-    vst->codec->codec_type  = CODEC_TYPE_VIDEO;
+    vst->codec->codec_type  = AVMEDIA_TYPE_VIDEO;
     vst->codec->codec_id    = CODEC_ID_JV;
     vst->codec->codec_tag   = 0; /* no fourcc */
     vst->codec->width       = avio_rl16(pb);
@@ -85,7 +85,7 @@ static int read_header(AVFormatContext *s,
 
     avio_skip(pb, 4);
 
-    ast->codec->codec_type  = CODEC_TYPE_AUDIO;
+    ast->codec->codec_type  = AVMEDIA_TYPE_AUDIO;
     ast->codec->codec_id    = CODEC_ID_PCM_U8;
     ast->codec->codec_tag   = 0; /* no fourcc */
     ast->codec->sample_rate = avio_rl16(pb);
@@ -151,7 +151,7 @@ static int read_packet(AVFormatContext *s, AVPacket *pkt)
                     return AVERROR(ENOMEM);
                 pkt->stream_index = 0;
                 pkt->pts          = e->timestamp;
-                pkt->flags       |= PKT_FLAG_KEY;
+                pkt->flags       |= AV_PKT_FLAG_KEY;
                 return 0;
             }
         case JV_VIDEO:
@@ -170,7 +170,7 @@ static int read_packet(AVFormatContext *s, AVPacket *pkt)
                 pkt->stream_index = 1;
                 pkt->pts          = jv->pts;
                 if (jvf->video_type != 1)
-                    pkt->flags |= PKT_FLAG_KEY;
+                    pkt->flags |= AV_PKT_FLAG_KEY;
                 return 0;
             }
         case JV_PADDING:
@@ -192,7 +192,7 @@ static int read_seek(AVFormatContext *s, int stream_index,
     int i;
 
     if (flags & (AVSEEK_FLAG_BYTE|AVSEEK_FLAG_FRAME))
-        return AVERROR_NOTSUPP;
+        return AVERROR(ENOSYS);
 
     switch(stream_index) {
     case 0:

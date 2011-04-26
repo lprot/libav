@@ -2,20 +2,20 @@
  * Sorenson-3 (SVQ3/SV3V) payload for RTP
  * Copyright (c) 2010 Ronald S. Bultje
  *
- * This file is part of FFmpeg.
+ * This file is part of Libav.
  *
- * FFmpeg is free software; you can redistribute it and/or
+ * Libav is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
  * version 2.1 of the License, or (at your option) any later version.
  *
- * FFmpeg is distributed in the hope that it will be useful,
+ * Libav is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with FFmpeg; if not, write to the Free Software
+ * License along with Libav; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
@@ -83,10 +83,10 @@ static int svq3_parse_packet (AVFormatContext *s, PayloadContext *sv,
 
         if (sv->pktbuf) {
             uint8_t *tmp;
-            url_close_dyn_buf(sv->pktbuf, &tmp);
+            avio_close_dyn_buf(sv->pktbuf, &tmp);
             av_free(tmp);
         }
-        if ((res = url_open_dyn_buf(&sv->pktbuf)) < 0)
+        if ((res = avio_open_dyn_buf(&sv->pktbuf)) < 0)
             return res;
         sv->timestamp   = *timestamp;
     }
@@ -100,7 +100,7 @@ static int svq3_parse_packet (AVFormatContext *s, PayloadContext *sv,
         av_init_packet(pkt);
         pkt->stream_index = st->index;
         *timestamp        = sv->timestamp;
-        pkt->size         = url_close_dyn_buf(sv->pktbuf, &pkt->data);
+        pkt->size         = avio_close_dyn_buf(sv->pktbuf, &pkt->data);
         pkt->destruct     = av_destruct_packet;
         sv->pktbuf        = NULL;
         return 0;
@@ -118,7 +118,7 @@ static void svq3_extradata_free(PayloadContext *sv)
 {
     if (sv->pktbuf) {
         uint8_t *buf;
-        url_close_dyn_buf(sv->pktbuf, &buf);
+        avio_close_dyn_buf(sv->pktbuf, &buf);
         av_free(buf);
     }
     av_free(sv);
@@ -128,7 +128,7 @@ RTPDynamicProtocolHandler ff_svq3_dynamic_handler = {
     .enc_name         = "X-SV3V-ES",
     .codec_type       = AVMEDIA_TYPE_VIDEO,
     .codec_id         = CODEC_ID_NONE,      // see if (config_packet) above
-    .open             = svq3_extradata_new,
-    .close            = svq3_extradata_free,
+    .alloc            = svq3_extradata_new,
+    .free             = svq3_extradata_free,
     .parse_packet     = svq3_parse_packet,
 };

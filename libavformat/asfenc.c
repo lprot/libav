@@ -2,20 +2,20 @@
  * ASF muxer
  * Copyright (c) 2000, 2001 Fabrice Bellard
  *
- * This file is part of FFmpeg.
+ * This file is part of Libav.
  *
- * FFmpeg is free software; you can redistribute it and/or
+ * Libav is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
  * version 2.1 of the License, or (at your option) any later version.
  *
- * FFmpeg is distributed in the hope that it will be useful,
+ * Libav is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with FFmpeg; if not, write to the Free Software
+ * License along with Libav; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 #include "avformat.h"
@@ -234,11 +234,11 @@ static void put_str16(AVIOContext *s, const char *tag)
     int len;
     uint8_t *pb;
     AVIOContext *dyn_buf;
-    if (url_open_dyn_buf(&dyn_buf) < 0)
+    if (avio_open_dyn_buf(&dyn_buf) < 0)
         return;
 
     avio_put_str16le(dyn_buf, tag);
-    len = url_close_dyn_buf(dyn_buf, &pb);
+    len = avio_close_dyn_buf(dyn_buf, &pb);
     avio_wl16(s, len);
     avio_write(s, pb, len);
     av_freep(&pb);
@@ -347,7 +347,7 @@ static int asf_write_header1(AVFormatContext *s, int64_t file_size, int64_t data
     avio_wl64(pb, duration); /* end time stamp (in 100ns units) */
     avio_wl64(pb, asf->duration); /* duration (in 100ns units) */
     avio_wl64(pb, PREROLL_TIME); /* start time stamp */
-    avio_wl32(pb, (asf->is_streamed || url_is_streamed(pb)) ? 3 : 2); /* ??? */
+    avio_wl32(pb, (asf->is_streamed || !pb->seekable ) ? 3 : 2); /* ??? */
     avio_wl32(pb, s->packet_size); /* packet size */
     avio_wl32(pb, s->packet_size); /* packet size */
     avio_wl32(pb, bit_rate); /* Nominal data rate in bps */
@@ -366,7 +366,7 @@ static int asf_write_header1(AVFormatContext *s, int64_t file_size, int64_t data
         uint8_t *buf;
         AVIOContext *dyn_buf;
 
-        if (url_open_dyn_buf(&dyn_buf) < 0)
+        if (avio_open_dyn_buf(&dyn_buf) < 0)
             return AVERROR(ENOMEM);
 
         hpos = put_header(pb, &ff_asf_comment_header);
@@ -375,7 +375,7 @@ static int asf_write_header1(AVFormatContext *s, int64_t file_size, int64_t data
             len = tags[n] ? avio_put_str16le(dyn_buf, tags[n]->value) : 0;
             avio_wl16(pb, len);
         }
-        len = url_close_dyn_buf(dyn_buf, &buf);
+        len = avio_close_dyn_buf(dyn_buf, &buf);
         avio_write(pb, buf, len);
         av_freep(&buf);
         end_header(pb, hpos);
@@ -497,11 +497,11 @@ static int asf_write_header1(AVFormatContext *s, int64_t file_size, int64_t data
         else
             desc = p ? p->name : enc->codec_name;
 
-        if ( url_open_dyn_buf(&dyn_buf) < 0)
+        if ( avio_open_dyn_buf(&dyn_buf) < 0)
             return AVERROR(ENOMEM);
 
         avio_put_str16le(dyn_buf, desc);
-        len = url_close_dyn_buf(dyn_buf, &buf);
+        len = avio_close_dyn_buf(dyn_buf, &buf);
         avio_wl16(pb, len / 2); // "number of characters" = length in bytes / 2
 
         avio_write(pb, buf, len);
@@ -866,7 +866,7 @@ static int asf_write_trailer(AVFormatContext *s)
     }
     avio_flush(s->pb);
 
-    if (asf->is_streamed || url_is_streamed(s->pb)) {
+    if (asf->is_streamed || !s->pb->seekable) {
         put_chunk(s, 0x4524, 0, 0); /* end of stream */
     } else {
         /* rewrite an updated header */

@@ -7,20 +7,20 @@
  * Copyright (c) 2008-2010 Paul Kendall <paul@kcbbs.gen.nz>
  * Copyright (c) 2010      Janne Grunau <janne-ffmpeg@jannau.net>
  *
- * This file is part of FFmpeg.
+ * This file is part of Libav.
  *
- * FFmpeg is free software; you can redistribute it and/or
+ * Libav is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
  * version 2.1 of the License, or (at your option) any later version.
  *
- * FFmpeg is distributed in the hope that it will be useful,
+ * Libav is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with FFmpeg; if not, write to the Free Software
+ * License along with Libav; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
@@ -87,6 +87,8 @@
 #include "fft.h"
 #include "fmtconvert.h"
 #include "lpc.h"
+#include "kbdwin.h"
+#include "sinewin.h"
 
 #include "aac.h"
 #include "aactab.h"
@@ -168,7 +170,7 @@ static ChannelElement *get_che(AACContext *ac, int type, int elem_id)
 /**
  * Check for the channel element in the current channel position configuration.
  * If it exists, make sure the appropriate element is allocated and map the
- * channel order to match the internal FFmpeg channel layout.
+ * channel order to match the internal Libav channel layout.
  *
  * @param   che_pos current channel position configuration
  * @param   type channel element type
@@ -178,9 +180,8 @@ static ChannelElement *get_che(AACContext *ac, int type, int elem_id)
  * @return  Returns error status. 0 - OK, !0 - error
  */
 static av_cold int che_configure(AACContext *ac,
-                         enum ChannelPosition che_pos[4][MAX_ELEM_ID],
-                         int type, int id,
-                         int *channels)
+                                 enum ChannelPosition che_pos[4][MAX_ELEM_ID],
+                                 int type, int id, int *channels)
 {
     if (che_pos[type][id]) {
         if (!ac->che[type][id] && !(ac->che[type][id] = av_mallocz(sizeof(ChannelElement))))
@@ -210,9 +211,9 @@ static av_cold int che_configure(AACContext *ac,
  * @return  Returns error status. 0 - OK, !0 - error
  */
 static av_cold int output_configure(AACContext *ac,
-                            enum ChannelPosition che_pos[4][MAX_ELEM_ID],
-                            enum ChannelPosition new_che_pos[4][MAX_ELEM_ID],
-                            int channel_config, enum OCStatus oc_type)
+                                    enum ChannelPosition che_pos[4][MAX_ELEM_ID],
+                                    enum ChannelPosition new_che_pos[4][MAX_ELEM_ID],
+                                    int channel_config, enum OCStatus oc_type)
 {
     AVCodecContext *avctx = ac->avctx;
     int i, type, channels = 0, ret;
@@ -229,7 +230,7 @@ static av_cold int output_configure(AACContext *ac,
                 return ret;
         }
 
-        memset(ac->tag_che_map, 0,       4 * MAX_ELEM_ID * sizeof(ac->che[0][0]));
+        memset(ac->tag_che_map, 0, 4 * MAX_ELEM_ID * sizeof(ac->che[0][0]));
 
         avctx->channel_layout = aac_channel_layout[channel_config - 1];
     } else {
@@ -344,8 +345,8 @@ static int decode_pce(AVCodecContext *avctx, MPEG4AudioConfig *m4ac,
  * @return  Returns error status. 0 - OK, !0 - error
  */
 static av_cold int set_default_channel_config(AVCodecContext *avctx,
-                                      enum ChannelPosition new_che_pos[4][MAX_ELEM_ID],
-                                      int channel_config)
+                                              enum ChannelPosition new_che_pos[4][MAX_ELEM_ID],
+                                              int channel_config)
 {
     if (channel_config < 1 || channel_config > 7) {
         av_log(avctx, AV_LOG_ERROR, "invalid default channel configuration (%d)\n",
@@ -462,6 +463,11 @@ static int decode_audio_specific_config(AACContext *ac,
     GetBitContext gb;
     int i;
 
+    av_dlog(avctx, "extradata size %d\n", avctx->extradata_size);
+    for (i = 0; i < avctx->extradata_size; i++)
+         av_dlog(avctx, "%02x ", avctx->extradata[i]);
+    av_dlog(avctx, "\n");
+
     init_get_bits(&gb, data, data_size * 8);
 
     if ((i = ff_mpeg4audio_get_config(m4ac, data, data_size)) < 0)
@@ -487,6 +493,10 @@ static int decode_audio_specific_config(AACContext *ac,
                m4ac->sbr == 1? "SBR+" : "", m4ac->object_type);
         return -1;
     }
+
+    av_dlog(avctx, "AOT %d chan config %d sampling index %d (%d) SBR %d PS %d\n",
+            m4ac->object_type, m4ac->chan_config, m4ac->sampling_index,
+            m4ac->sample_rate, m4ac->sbr, m4ac->ps);
 
     return get_bits_count(&gb);
 }
@@ -962,19 +972,19 @@ static inline float *VMUL4S(float *dst, const float *v, unsigned idx,
     union float754 s = { .f = *scale };
     union float754 t;
 
-    t.i = s.i ^ (sign & 1<<31);
+    t.i = s.i ^ (sign & 1U<<31);
     *dst++ = v[idx    & 3] * t.f;
 
     sign <<= nz & 1; nz >>= 1;
-    t.i = s.i ^ (sign & 1<<31);
+    t.i = s.i ^ (sign & 1U<<31);
     *dst++ = v[idx>>2 & 3] * t.f;
 
     sign <<= nz & 1; nz >>= 1;
-    t.i = s.i ^ (sign & 1<<31);
+    t.i = s.i ^ (sign & 1U<<31);
     *dst++ = v[idx>>4 & 3] * t.f;
 
     sign <<= nz & 1; nz >>= 1;
-    t.i = s.i ^ (sign & 1<<31);
+    t.i = s.i ^ (sign & 1U<<31);
     *dst++ = v[idx>>6 & 3] * t.f;
 
     return dst;
@@ -1167,11 +1177,11 @@ static int decode_spectrum_and_dequant(AACContext *ac, float coef[1024],
                                     b += 4;
                                     n = (1 << b) + SHOW_UBITS(re, gb, b);
                                     LAST_SKIP_BITS(re, gb, b);
-                                    *icf++ = cbrt_tab[n] | (bits & 1<<31);
+                                    *icf++ = cbrt_tab[n] | (bits & 1U<<31);
                                     bits <<= 1;
                                 } else {
                                     unsigned v = ((const uint32_t*)vq)[cb_idx & 15];
-                                    *icf++ = (bits & 1<<31) | v;
+                                    *icf++ = (bits & 1U<<31) | v;
                                     bits <<= !!v;
                                 }
                                 cb_idx >>= 4;
@@ -1233,7 +1243,7 @@ static av_always_inline float flt16_trunc(float pf)
 
 static av_always_inline void predict(PredictorState *ps, float *coef,
                                      float sf_scale, float inv_sf_scale,
-                    int output_enable)
+                                     int output_enable)
 {
     const float a     = 0.953125; // 61.0 / 64
     const float alpha = 0.90625;  // 29.0 / 32
@@ -1750,7 +1760,7 @@ static void windowing_and_mdct_ltp(AACContext *ac, float *out,
         ac->dsp.vector_fmul_reverse(in + 1024 + 448, in + 1024 + 448, swindow, 128);
         memset(in + 1024 + 576, 0, 448 * sizeof(float));
     }
-    ff_mdct_calc(&ac->mdct_ltp, out, in);
+    ac->mdct_ltp.mdct_calc(&ac->mdct_ltp, out, in);
 }
 
 /**
@@ -1839,9 +1849,9 @@ static void imdct_and_windowing(AACContext *ac, SingleChannelElement *sce)
     // imdct
     if (ics->window_sequence[0] == EIGHT_SHORT_SEQUENCE) {
         for (i = 0; i < 1024; i += 128)
-            ff_imdct_half(&ac->mdct_small, buf + i, in + i);
+            ac->mdct_small.imdct_half(&ac->mdct_small, buf + i, in + i);
     } else
-        ff_imdct_half(&ac->mdct, buf, in);
+        ac->mdct.imdct_half(&ac->mdct, buf, in);
 
     /* window overlapping
      * NOTE: To simplify the overlapping code, all 'meaningless' short to long
@@ -2248,6 +2258,7 @@ static int latm_decode_audio_specific_config(struct LATMContext *latmctx,
                                              GetBitContext *gb)
 {
     AVCodecContext *avctx = latmctx->aac_ctx.avctx;
+    MPEG4AudioConfig m4ac;
     int  config_start_bit = get_bits_count(gb);
     int     bits_consumed, esize;
 
@@ -2257,8 +2268,7 @@ static int latm_decode_audio_specific_config(struct LATMContext *latmctx,
         return AVERROR_INVALIDDATA;
     } else {
         bits_consumed =
-            decode_audio_specific_config(&latmctx->aac_ctx, avctx,
-                                         &latmctx->aac_ctx.m4ac,
+            decode_audio_specific_config(NULL, avctx, &m4ac,
                                          gb->buffer + (config_start_bit / 8),
                                          get_bits_left(gb) / 8);
 

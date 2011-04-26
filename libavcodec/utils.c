@@ -3,20 +3,20 @@
  * Copyright (c) 2001 Fabrice Bellard
  * Copyright (c) 2002-2004 Michael Niedermayer <michaelni@gmx.at>
  *
- * This file is part of FFmpeg.
+ * This file is part of Libav.
  *
- * FFmpeg is free software; you can redistribute it and/or
+ * Libav is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
  * version 2.1 of the License, or (at your option) any later version.
  *
- * FFmpeg is distributed in the hope that it will be useful,
+ * Libav is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with FFmpeg; if not, write to the Free Software
+ * License along with Libav; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
@@ -48,7 +48,7 @@ static int volatile entangled_thread_counter=0;
 static int (*ff_lockmgr_cb)(void **mutex, enum AVLockOp op);
 static void *codec_mutex;
 
-void *av_fast_realloc(void *ptr, unsigned int *size, FF_INTERNALC_MEM_TYPE min_size)
+void *av_fast_realloc(void *ptr, unsigned int *size, size_t min_size)
 {
     if(min_size < *size)
         return ptr;
@@ -64,7 +64,7 @@ void *av_fast_realloc(void *ptr, unsigned int *size, FF_INTERNALC_MEM_TYPE min_s
     return ptr;
 }
 
-void av_fast_malloc(void *ptr, unsigned int *size, FF_INTERNALC_MEM_TYPE min_size)
+void av_fast_malloc(void *ptr, unsigned int *size, size_t min_size)
 {
     void **p = ptr;
     if (min_size < *size)
@@ -93,13 +93,6 @@ void avcodec_register(AVCodec *codec)
     *p = codec;
     codec->next = NULL;
 }
-
-#if LIBAVCODEC_VERSION_MAJOR < 53
-void register_avcodec(AVCodec *codec)
-{
-    avcodec_register(codec);
-}
-#endif
 
 unsigned avcodec_get_edge_width(void)
 {
@@ -219,12 +212,6 @@ void avcodec_align_dimensions(AVCodecContext *s, int *width, int *height){
     align = FFMAX3(align, linesize_align[1], linesize_align[2]);
     *width=FFALIGN(*width, align);
 }
-
-#if LIBAVCODEC_VERSION_MAJOR < 53
-int avcodec_check_dimensions(void *av_log_ctx, unsigned int w, unsigned int h){
-    return av_image_check_size(w, h, 0, av_log_ctx);
-}
-#endif
 
 int avcodec_default_get_buffer(AVCodecContext *s, AVFrame *pic){
     int i;
@@ -469,7 +456,7 @@ AVFrame *avcodec_alloc_frame(void){
 
 int attribute_align_arg avcodec_open(AVCodecContext *avctx, AVCodec *codec)
 {
-    int ret= -1;
+    int ret = 0;
 
     /* If there is a user-supplied mutex locking routine, call it. */
     if (ff_lockmgr_cb) {
@@ -480,11 +467,14 @@ int attribute_align_arg avcodec_open(AVCodecContext *avctx, AVCodec *codec)
     entangled_thread_counter++;
     if(entangled_thread_counter != 1){
         av_log(avctx, AV_LOG_ERROR, "insufficient thread locking around avcodec_open/close()\n");
+        ret = -1;
         goto end;
     }
 
-    if(avctx->codec || !codec)
+    if(avctx->codec || !codec) {
+        ret = AVERROR(EINVAL);
         goto end;
+    }
 
     if (codec->priv_data_size > 0) {
       if(!avctx->priv_data){
@@ -534,12 +524,13 @@ int attribute_align_arg avcodec_open(AVCodecContext *avctx, AVCodec *codec)
     if (avctx->codec_id != codec->id || (avctx->codec_type != codec->type
                            && avctx->codec_type != AVMEDIA_TYPE_ATTACHMENT)) {
         av_log(avctx, AV_LOG_ERROR, "codec type or id mismatches\n");
+        ret = AVERROR(EINVAL);
         goto free_and_end;
     }
     avctx->frame_number = 0;
 
     if (HAVE_THREADS && !avctx->thread_opaque) {
-        ret = ff_thread_init(avctx, avctx->thread_count);
+        ret = ff_thread_init(avctx);
         if (ret < 0) {
             goto free_and_end;
         }
@@ -548,6 +539,7 @@ int attribute_align_arg avcodec_open(AVCodecContext *avctx, AVCodec *codec)
     if (avctx->codec->max_lowres < avctx->lowres) {
         av_log(avctx, AV_LOG_ERROR, "The maximum value for lowres supported by the decoder is %d\n",
                avctx->codec->max_lowres);
+        ret = AVERROR(EINVAL);
         goto free_and_end;
     }
     if (avctx->codec->sample_fmts && avctx->codec->encode) {
@@ -557,6 +549,7 @@ int attribute_align_arg avcodec_open(AVCodecContext *avctx, AVCodec *codec)
                 break;
         if (avctx->codec->sample_fmts[i] == AV_SAMPLE_FMT_NONE) {
             av_log(avctx, AV_LOG_ERROR, "Specified sample_fmt is not supported.\n");
+            ret = AVERROR(EINVAL);
             goto free_and_end;
         }
     }
@@ -567,7 +560,6 @@ int attribute_align_arg avcodec_open(AVCodecContext *avctx, AVCodec *codec)
             goto free_and_end;
         }
     }
-    ret=0;
 end:
     entangled_thread_counter--;
 
@@ -631,22 +623,6 @@ int avcodec_encode_subtitle(AVCodecContext *avctx, uint8_t *buf, int buf_size,
     return ret;
 }
 
-#if FF_API_VIDEO_OLD
-int attribute_align_arg avcodec_decode_video(AVCodecContext *avctx, AVFrame *picture,
-                         int *got_picture_ptr,
-                         const uint8_t *buf, int buf_size)
-{
-    AVPacket avpkt;
-    av_init_packet(&avpkt);
-    avpkt.data = buf;
-    avpkt.size = buf_size;
-    // HACK for CorePNG to decode as normal PNG by default
-    avpkt.flags = AV_PKT_FLAG_KEY;
-
-    return avcodec_decode_video2(avctx, picture, got_picture_ptr, &avpkt);
-}
-#endif
-
 int attribute_align_arg avcodec_decode_video2(AVCodecContext *avctx, AVFrame *picture,
                          int *got_picture_ptr,
                          AVPacket *avpkt)
@@ -679,20 +655,6 @@ int attribute_align_arg avcodec_decode_video2(AVCodecContext *avctx, AVFrame *pi
     return ret;
 }
 
-#if FF_API_AUDIO_OLD
-int attribute_align_arg avcodec_decode_audio2(AVCodecContext *avctx, int16_t *samples,
-                         int *frame_size_ptr,
-                         const uint8_t *buf, int buf_size)
-{
-    AVPacket avpkt;
-    av_init_packet(&avpkt);
-    avpkt.data = buf;
-    avpkt.size = buf_size;
-
-    return avcodec_decode_audio3(avctx, samples, frame_size_ptr, &avpkt);
-}
-#endif
-
 int attribute_align_arg avcodec_decode_audio3(AVCodecContext *avctx, int16_t *samples,
                          int *frame_size_ptr,
                          AVPacket *avpkt)
@@ -721,20 +683,6 @@ int attribute_align_arg avcodec_decode_audio3(AVCodecContext *avctx, int16_t *sa
     }
     return ret;
 }
-
-#if FF_API_SUBTITLE_OLD
-int avcodec_decode_subtitle(AVCodecContext *avctx, AVSubtitle *sub,
-                            int *got_sub_ptr,
-                            const uint8_t *buf, int buf_size)
-{
-    AVPacket avpkt;
-    av_init_packet(&avpkt);
-    avpkt.data = buf;
-    avpkt.size = buf_size;
-
-    return avcodec_decode_subtitle2(avctx, sub, got_sub_ptr, &avpkt);
-}
-#endif
 
 int avcodec_decode_subtitle2(AVCodecContext *avctx, AVSubtitle *sub,
                             int *got_sub_ptr,
@@ -1082,18 +1030,11 @@ void avcodec_default_free_buffers(AVCodecContext *s){
     s->internal_buffer_count=0;
 }
 
+#if FF_API_OLD_FF_PICT_TYPES
 char av_get_pict_type_char(int pict_type){
-    switch(pict_type){
-    case FF_I_TYPE: return 'I';
-    case FF_P_TYPE: return 'P';
-    case FF_B_TYPE: return 'B';
-    case FF_S_TYPE: return 'S';
-    case FF_SI_TYPE:return 'i';
-    case FF_SP_TYPE:return 'p';
-    case FF_BI_TYPE:return 'b';
-    default:        return '?';
-    }
+    return av_get_picture_type_char(pict_type);
 }
+#endif
 
 int av_get_bits_per_sample(enum CodecID codec_id){
     switch(codec_id){
@@ -1107,6 +1048,7 @@ int av_get_bits_per_sample(enum CodecID codec_id){
     case CODEC_ID_ADPCM_MS:
     case CODEC_ID_ADPCM_YAMAHA:
         return 4;
+    case CODEC_ID_ADPCM_G722:
     case CODEC_ID_PCM_ALAW:
     case CODEC_ID_PCM_MULAW:
     case CODEC_ID_PCM_S8:
@@ -1147,8 +1089,7 @@ int av_get_bits_per_sample_format(enum AVSampleFormat sample_fmt) {
 #endif
 
 #if !HAVE_THREADS
-int ff_thread_init(AVCodecContext *s, int thread_count){
-    s->thread_count = thread_count;
+int ff_thread_init(AVCodecContext *s){
     return -1;
 }
 #endif
@@ -1167,20 +1108,6 @@ unsigned int av_xiphlacing(unsigned char *s, unsigned int v)
     return n;
 }
 
-#if LIBAVCODEC_VERSION_MAJOR < 53
-#include "libavutil/parseutils.h"
-
-int av_parse_video_frame_size(int *width_ptr, int *height_ptr, const char *str)
-{
-    return av_parse_video_size(width_ptr, height_ptr, str);
-}
-
-int av_parse_video_frame_rate(AVRational *frame_rate, const char *arg)
-{
-    return av_parse_video_rate(frame_rate, arg);
-}
-#endif
-
 int ff_match_2uint16(const uint16_t (*tab)[2], int size, int a, int b){
     int i;
     for(i=0; i<size && !(tab[i][0]==a && tab[i][1]==b); i++);
@@ -1189,7 +1116,7 @@ int ff_match_2uint16(const uint16_t (*tab)[2], int size, int a, int b){
 
 void av_log_missing_feature(void *avc, const char *feature, int want_sample)
 {
-    av_log(avc, AV_LOG_WARNING, "%s not implemented. Update your FFmpeg "
+    av_log(avc, AV_LOG_WARNING, "%s not implemented. Update your Libav "
             "version to the newest one from Git. If the problem still "
             "occurs, it means that your file has a feature which has not "
             "been implemented.", feature);
@@ -1199,13 +1126,19 @@ void av_log_missing_feature(void *avc, const char *feature, int want_sample)
         av_log(avc, AV_LOG_WARNING, "\n");
 }
 
-void av_log_ask_for_sample(void *avc, const char *msg)
+void av_log_ask_for_sample(void *avc, const char *msg, ...)
 {
+    va_list argument_list;
+
+    va_start(argument_list, msg);
+
     if (msg)
-        av_log(avc, AV_LOG_WARNING, "%s ", msg);
+        av_vlog(avc, AV_LOG_WARNING, msg, argument_list);
     av_log(avc, AV_LOG_WARNING, "If you want to help, upload a sample "
-            "of this file to ftp://upload.libav.org/MPlayer/incoming/ "
+            "of this file to ftp://upload.libav.org/incoming/ "
             "and contact the libav-devel mailing list.\n");
+
+    va_end(argument_list);
 }
 
 static AVHWAccel *first_hwaccel = NULL;
@@ -1287,18 +1220,10 @@ void ff_thread_await_progress(AVFrame *f, int progress, int field)
 
 #endif
 
-#if LIBAVCODEC_VERSION_MAJOR < 53
-
+#if FF_API_THREAD_INIT
 int avcodec_thread_init(AVCodecContext *s, int thread_count)
 {
-    return ff_thread_init(s, thread_count);
+    s->thread_count = thread_count;
+    return ff_thread_init(s);
 }
-
-void avcodec_thread_free(AVCodecContext *s)
-{
-#if HAVE_THREADS
-    ff_thread_free(s);
-#endif
-}
-
 #endif

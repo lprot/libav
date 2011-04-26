@@ -2,20 +2,20 @@
  * LXF demuxer
  * Copyright (c) 2010 Tomas Härdin
  *
- * This file is part of FFmpeg.
+ * This file is part of Libav.
  *
- * FFmpeg is free software; you can redistribute it and/or
+ * Libav is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
  * version 2.1 of the License, or (at your option) any later version.
  *
- * FFmpeg is distributed in the hope that it will be useful,
+ * Libav is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with FFmpeg; if not, write to the Free Software
+ * License along with Libav; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
@@ -218,7 +218,7 @@ static int lxf_read_header(AVFormatContext *s, AVFormatParameters *ap)
         return ret < 0 ? ret : AVERROR_EOF;
 
     if (!(st = av_new_stream(s, 0)))
-        return AVERROR_NOMEM;
+        return AVERROR(ENOMEM);
 
     st->duration          = AV_RL32(&header_data[32]);
     video_params          = AV_RL32(&header_data[40]);
@@ -244,7 +244,7 @@ static int lxf_read_header(AVFormatContext *s, AVFormatParameters *ap)
 
     if ((lxf->channels = (disk_params >> 2) & 0xF)) {
         if (!(st = av_new_stream(s, 1)))
-            return AVERROR_NOMEM;
+            return AVERROR(ENOMEM);
 
         st->codec->codec_type  = AVMEDIA_TYPE_AUDIO;
         st->codec->sample_rate = LXF_SAMPLERATE;

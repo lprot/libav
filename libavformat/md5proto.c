@@ -1,20 +1,20 @@
 /*
  * Copyright (c) 2010 Mans Rullgard
  *
- * This file is part of FFmpeg.
+ * This file is part of Libav.
  *
- * FFmpeg is free software; you can redistribute it and/or
+ * Libav is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
  * version 2.1 of the License, or (at your option) any later version.
  *
- * FFmpeg is distributed in the hope that it will be useful,
+ * Libav is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with FFmpeg; if not, write to the Free Software
+ * License along with Libav; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
@@ -25,6 +25,7 @@
 #include "libavutil/error.h"
 #include "avformat.h"
 #include "avio.h"
+#include "url.h"
 
 #define PRIV_SIZE 128
 
@@ -35,7 +36,7 @@ static int md5_open(URLContext *h, const char *filename, int flags)
         return -1;
     }
 
-    if (flags != URL_WRONLY)
+    if (!flags & AVIO_FLAG_WRITE)
         return AVERROR(EINVAL);
 
     av_md5_init(h->priv_data);
@@ -64,11 +65,11 @@ static int md5_close(URLContext *h)
     av_strstart(filename, "md5:", &filename);
 
     if (*filename) {
-        err = url_open(&out, filename, URL_WRONLY);
+        err = ffurl_open(&out, filename, AVIO_FLAG_WRITE);
         if (err)
             return err;
-        err = url_write(out, buf, i*2+1);
-        url_close(out);
+        err = ffurl_write(out, buf, i*2+1);
+        ffurl_close(out);
     } else {
         if (fwrite(buf, 1, i*2+1, stdout) < i*2+1)
             err = AVERROR(errno);

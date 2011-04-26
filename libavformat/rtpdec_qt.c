@@ -2,20 +2,20 @@
  * RTP/Quicktime support.
  * Copyright (c) 2009 Ronald S. Bultje
  *
- * This file is part of FFmpeg.
+ * This file is part of Libav.
  *
- * FFmpeg is free software; you can redistribute it and/or
+ * Libav is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
  * version 2.1 of the License, or (at your option) any later version.
  *
- * FFmpeg is distributed in the hope that it will be useful,
+ * Libav is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with FFmpeg; if not, write to the Free Software
+ * License along with Libav; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
@@ -98,7 +98,7 @@ static int qt_rtp_parse_packet(AVFormatContext *s, PayloadContext *qt,
         if (!is_start || !is_finish) {
             av_log_missing_feature(s, "RTP-X-QT with payload description "
                                       "split over several packets", 1);
-            return AVERROR_NOTSUPP;
+            return AVERROR(ENOSYS);
         }
         skip_bits(&gb, 12); // reserved
         data_len = get_bits(&gb, 16);
@@ -161,7 +161,7 @@ static int qt_rtp_parse_packet(AVFormatContext *s, PayloadContext *qt,
 
     if (has_packet_info) {
         av_log_missing_feature(s, "RTP-X-QT with packet specific info", 1);
-        return AVERROR_NOTSUPP;
+        return AVERROR(ENOSYS);
     }
 
     alen = len - avio_tell(&pb);
@@ -224,7 +224,7 @@ static int qt_rtp_parse_packet(AVFormatContext *s, PayloadContext *qt,
 
     default:  /* unimplemented */
         av_log_missing_feature(NULL, "RTP-X-QT with packing scheme 2", 1);
-        return AVERROR_NOTSUPP;
+        return AVERROR(ENOSYS);
     }
 }
 
@@ -244,8 +244,8 @@ RTPDynamicProtocolHandler ff_ ## m ## _rtp_ ## n ## _handler = { \
     .enc_name         = s, \
     .codec_type       = t, \
     .codec_id         = CODEC_ID_NONE, \
-    .open             = qt_rtp_new,    \
-    .close            = qt_rtp_free,   \
+    .alloc            = qt_rtp_new,    \
+    .free             = qt_rtp_free,   \
     .parse_packet     = qt_rtp_parse_packet, \
 }
 

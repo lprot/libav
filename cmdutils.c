@@ -2,20 +2,20 @@
  * Various utilities for command line tools
  * Copyright (c) 2000-2003 Fabrice Bellard
  *
- * This file is part of FFmpeg.
+ * This file is part of Libav.
  *
- * FFmpeg is free software; you can redistribute it and/or
+ * Libav is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
  * version 2.1 of the License, or (at your option) any later version.
  *
- * FFmpeg is distributed in the hope that it will be useful,
+ * Libav is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with FFmpeg; if not, write to the Free Software
+ * License along with Libav; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
@@ -38,7 +38,7 @@
 #include "libavutil/parseutils.h"
 #include "libavutil/pixdesc.h"
 #include "libavutil/eval.h"
-#include "libavcodec/opt.h"
+#include "libavutil/opt.h"
 #include "cmdutils.h"
 #include "version.h"
 #if CONFIG_NETWORK
@@ -155,12 +155,76 @@ static const OptionDef* find_option(const OptionDef *po, const char *name){
     return po;
 }
 
+#if defined(_WIN32) && !defined(__MINGW32CE__)
+#include <windows.h>
+/* Will be leaked on exit */
+static char** win32_argv_utf8 = NULL;
+static int win32_argc = 0;
+
+/**
+ * Prepare command line arguments for executable.
+ * For Windows - perform wide-char to UTF-8 conversion.
+ * Input arguments should be main() function arguments.
+ * @param argc_ptr Arguments number (including executable)
+ * @param argv_ptr Arguments list.
+ */
+static void prepare_app_arguments(int *argc_ptr, char ***argv_ptr)
+{
+    char *argstr_flat;
+    wchar_t **argv_w;
+    int i, buffsize = 0, offset = 0;
+
+    if (win32_argv_utf8) {
+        *argc_ptr = win32_argc;
+        *argv_ptr = win32_argv_utf8;
+        return;
+    }
+
+    win32_argc = 0;
+    argv_w = CommandLineToArgvW(GetCommandLineW(), &win32_argc);
+    if (win32_argc <= 0 || !argv_w)
+        return;
+
+    /* determine the UTF-8 buffer size (including NULL-termination symbols) */
+    for (i = 0; i < win32_argc; i++)
+        buffsize += WideCharToMultiByte(CP_UTF8, 0, argv_w[i], -1,
+                                        NULL, 0, NULL, NULL);
+
+    win32_argv_utf8 = av_mallocz(sizeof(char*) * (win32_argc + 1) + buffsize);
+    argstr_flat     = (char*)win32_argv_utf8 + sizeof(char*) * (win32_argc + 1);
+    if (win32_argv_utf8 == NULL) {
+        LocalFree(argv_w);
+        return;
+    }
+
+    for (i = 0; i < win32_argc; i++) {
+        win32_argv_utf8[i] = &argstr_flat[offset];
+        offset += WideCharToMultiByte(CP_UTF8, 0, argv_w[i], -1,
+                                      &argstr_flat[offset],
+                                      buffsize - offset, NULL, NULL);
+    }
+    win32_argv_utf8[i] = NULL;
+    LocalFree(argv_w);
+
+    *argc_ptr = win32_argc;
+    *argv_ptr = win32_argv_utf8;
+}
+#else
+static inline void prepare_app_arguments(int *argc_ptr, char ***argv_ptr)
+{
+    /* nothing to do */
+}
+#endif /* WIN32 && !__MINGW32CE__ */
+
 void parse_options(int argc, char **argv, const OptionDef *options,
                    void (* parse_arg_function)(const char*))
 {
     const char *opt, *arg;
     int optindex, handleoptions=1;
     const OptionDef *po;
+
+    /* perform system-dependent conversions for arguments list */
+    prepare_app_arguments(&argc, &argv);
 
     /* parse options */
     optindex = 1;
@@ -653,20 +717,16 @@ void show_bsfs(void)
 
 void show_protocols(void)
 {
-    URLProtocol *up=NULL;
+    void *opaque = NULL;
+    const char *name;
 
     printf("Supported file protocols:\n"
-           "I.. = Input  supported\n"
-           ".O. = Output supported\n"
-           "..S = Seek   supported\n"
-           "FLAGS NAME\n"
-           "----- \n");
-    while((up = av_protocol_next(up)))
-        printf("%c%c%c   %s\n",
-               up->url_read  ? 'I' : '.',
-               up->url_write ? 'O' : '.',
-               up->url_seek  ? 'S' : '.',
-               up->name);
+           "Input:\n");
+    while ((name = avio_enum_protocols(&opaque, 0)))
+        printf("%s\n", name);
+    printf("Output:\n");
+    while ((name = avio_enum_protocols(&opaque, 1)))
+        printf("%s\n", name);
 }
 
 void show_filters(void)
@@ -862,6 +922,8 @@ int get_filtered_video_frame(AVFilterContext *ctx, AVFrame *frame,
     memcpy(frame->linesize, picref->linesize, sizeof(frame->linesize));
     frame->interlaced_frame = picref->video->interlaced;
     frame->top_field_first  = picref->video->top_field_first;
+    frame->key_frame        = picref->video->key_frame;
+    frame->pict_type        = picref->video->pict_type;
 
     return 1;
 }

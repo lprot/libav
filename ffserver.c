@@ -2,20 +2,20 @@
  * Multiple format streaming server
  * Copyright (c) 2000, 2001, 2002 Fabrice Bellard
  *
- * This file is part of FFmpeg.
+ * This file is part of Libav.
  *
- * FFmpeg is free software; you can redistribute it and/or
+ * Libav is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
  * version 2.1 of the License, or (at your option) any later version.
  *
- * FFmpeg is distributed in the hope that it will be useful,
+ * Libav is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with FFmpeg; if not, write to the Free Software
+ * License along with Libav; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
@@ -29,15 +29,18 @@
 #include <strings.h>
 #include <stdlib.h>
 #include "libavformat/avformat.h"
+#include "libavformat/ffm.h"
 #include "libavformat/network.h"
 #include "libavformat/os_support.h"
 #include "libavformat/rtpdec.h"
 #include "libavformat/rtsp.h"
+// XXX for ffio_open_dyn_packet_buffer, to be removed
+#include "libavformat/avio_internal.h"
 #include "libavutil/avstring.h"
 #include "libavutil/lfg.h"
 #include "libavutil/random_seed.h"
 #include "libavutil/parseutils.h"
-#include "libavcodec/opt.h"
+#include "libavutil/opt.h"
 #include <stdarg.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -56,7 +59,7 @@
 
 #include "cmdutils.h"
 
-const char program_name[] = "FFserver";
+const char program_name[] = "ffserver";
 const int program_birth_year = 2000;
 
 static const OptionDef options[];
@@ -92,9 +95,7 @@ static const char *http_state[] = {
     "RTSP_SEND_PACKET",
 };
 
-#if !FF_API_MAX_STREAMS
 #define MAX_STREAMS 20
-#endif
 
 #define IOBUFFER_INIT_SIZE 8192
 
@@ -869,10 +870,10 @@ static void close_connection(HTTPContext *c)
     if (!c->last_packet_sent && c->state == HTTPSTATE_SEND_DATA_TRAILER) {
         if (ctx->oformat) {
             /* prepare header */
-            if (url_open_dyn_buf(&ctx->pb) >= 0) {
+            if (avio_open_dyn_buf(&ctx->pb) >= 0) {
                 av_write_trailer(ctx);
                 av_freep(&c->pb_buffer);
-                url_close_dyn_buf(ctx->pb, &c->pb_buffer);
+                avio_close_dyn_buf(ctx->pb, &c->pb_buffer);
             }
         }
     }
@@ -1873,7 +1874,7 @@ static void compute_status(HTTPContext *c)
     int i, len;
     AVIOContext *pb;
 
-    if (url_open_dyn_buf(&pb) < 0) {
+    if (avio_open_dyn_buf(&pb) < 0) {
         /* XXX: return an error ? */
         c->buffer_ptr = c->buffer;
         c->buffer_end = c->buffer;
@@ -2101,7 +2102,7 @@ static void compute_status(HTTPContext *c)
     avio_printf(pb, "<hr size=1 noshade>Generated at %s", p);
     avio_printf(pb, "</body>\n</html>\n");
 
-    len = url_close_dyn_buf(pb, &c->pb_buffer);
+    len = avio_close_dyn_buf(pb, &c->pb_buffer);
     c->buffer_ptr = c->pb_buffer;
     c->buffer_end = c->pb_buffer + len;
 }
@@ -2184,10 +2185,8 @@ static int open_input_stream(HTTPContext *c, const char *info)
         }
     }
 
-#if 1
     if (c->fmt_in->iformat->read_seek)
         av_seek_frame(c->fmt_in, -1, stream_pos, 0);
-#endif
     /* set the start time (needed for maxtime and RTP packet timing) */
     c->start_time = cur_time;
     c->first_pts = AV_NOPTS_VALUE;
@@ -2256,15 +2255,15 @@ static int http_prepare_data(HTTPContext *c)
         c->got_key_frame = 0;
 
         /* prepare header and save header data in a stream */
-        if (url_open_dyn_buf(&c->fmt_ctx.pb) < 0) {
+        if (avio_open_dyn_buf(&c->fmt_ctx.pb) < 0) {
             /* XXX: potential leak */
             return -1;
         }
-        c->fmt_ctx.pb->is_streamed = 1;
+        c->fmt_ctx.pb->seekable = 0;
 
         /*
          * HACK to avoid mpeg ps muxer to spit many underflow errors
-         * Default value from FFmpeg
+         * Default value from Libav
          * Try to set it use configuration option
          */
         c->fmt_ctx.preload   = (int)(0.5*AV_TIME_BASE);
@@ -2277,7 +2276,7 @@ static int http_prepare_data(HTTPContext *c)
         }
         av_metadata_free(&c->fmt_ctx.metadata);
 
-        len = url_close_dyn_buf(c->fmt_ctx.pb, &c->pb_buffer);
+        len = avio_close_dyn_buf(c->fmt_ctx.pb, &c->pb_buffer);
         c->buffer_ptr = c->pb_buffer;
         c->buffer_end = c->pb_buffer + len;
 
@@ -2389,9 +2388,9 @@ static int http_prepare_data(HTTPContext *c)
                             max_packet_size = RTSP_TCP_MAX_PACKET_SIZE;
                         else
                             max_packet_size = url_get_max_packet_size(c->rtp_handles[c->packet_stream_index]);
-                        ret = url_open_dyn_packet_buf(&ctx->pb, max_packet_size);
+                        ret = ffio_open_dyn_packet_buf(&ctx->pb, max_packet_size);
                     } else {
-                        ret = url_open_dyn_buf(&ctx->pb);
+                        ret = avio_open_dyn_buf(&ctx->pb);
                     }
                     if (ret < 0) {
                         /* XXX: potential leak */
@@ -2399,7 +2398,7 @@ static int http_prepare_data(HTTPContext *c)
                     }
                     ost = ctx->streams[pkt.stream_index];
 
-                    ctx->pb->is_streamed = 1;
+                    ctx->pb->seekable = 0;
                     if (pkt.dts != AV_NOPTS_VALUE)
                         pkt.dts = av_rescale_q(pkt.dts, ist->time_base, ost->time_base);
                     if (pkt.pts != AV_NOPTS_VALUE)
@@ -2410,7 +2409,7 @@ static int http_prepare_data(HTTPContext *c)
                         c->state = HTTPSTATE_SEND_DATA_TRAILER;
                     }
 
-                    len = url_close_dyn_buf(ctx->pb, &c->pb_buffer);
+                    len = avio_close_dyn_buf(ctx->pb, &c->pb_buffer);
                     c->cur_frame_bytes = len;
                     c->buffer_ptr = c->pb_buffer;
                     c->buffer_end = c->pb_buffer + len;
@@ -2432,13 +2431,13 @@ static int http_prepare_data(HTTPContext *c)
             return -1;
         ctx = &c->fmt_ctx;
         /* prepare header */
-        if (url_open_dyn_buf(&ctx->pb) < 0) {
+        if (avio_open_dyn_buf(&ctx->pb) < 0) {
             /* XXX: potential leak */
             return -1;
         }
-        c->fmt_ctx.pb->is_streamed = 1;
+        c->fmt_ctx.pb->seekable = 0;
         av_write_trailer(ctx);
-        len = url_close_dyn_buf(ctx->pb, &c->pb_buffer);
+        len = avio_close_dyn_buf(ctx->pb, &c->pb_buffer);
         c->buffer_ptr = c->pb_buffer;
         c->buffer_end = c->pb_buffer + len;
 
@@ -2503,7 +2502,7 @@ static int http_send_data(HTTPContext *c)
                     /* if already sending something, then wait. */
                     if (rtsp_c->state != RTSPSTATE_WAIT_REQUEST)
                         break;
-                    if (url_open_dyn_buf(&pb) < 0)
+                    if (avio_open_dyn_buf(&pb) < 0)
                         goto fail1;
                     interleaved_index = c->packet_stream_index * 2;
                     /* RTCP packets are sent at odd indexes */
@@ -2518,7 +2517,7 @@ static int http_send_data(HTTPContext *c)
                     /* write RTP packet data */
                     c->buffer_ptr += 4;
                     avio_write(pb, c->buffer_ptr, len);
-                    size = url_close_dyn_buf(pb, &c->packet_buffer);
+                    size = avio_close_dyn_buf(pb, &c->packet_buffer);
                     /* prepare asynchronous TCP sending */
                     rtsp_c->packet_buffer_ptr = c->packet_buffer;
                     rtsp_c->packet_buffer_end = c->packet_buffer + size;
@@ -2723,7 +2722,7 @@ static int http_receive_data(HTTPContext *c)
 
             pb = avio_alloc_context(c->buffer, c->buffer_end - c->buffer,
                                     0, NULL, NULL, NULL, NULL);
-            pb->is_streamed = 1;
+            pb->seekable = 0;
 
             if (av_open_input_stream(&s, pb, c->stream->feed_filename, fmt_in, NULL) < 0) {
                 av_free(pb);
@@ -2850,7 +2849,7 @@ static int rtsp_parse_request(HTTPContext *c)
     av_strlcpy(c->url, url, sizeof(c->url));
     av_strlcpy(c->protocol, protocol, sizeof(c->protocol));
 
-    if (url_open_dyn_buf(&c->pb) < 0) {
+    if (avio_open_dyn_buf(&c->pb) < 0) {
         /* XXX: cannot do more */
         c->pb = NULL; /* safety */
         return -1;
@@ -2907,7 +2906,7 @@ static int rtsp_parse_request(HTTPContext *c)
         rtsp_reply_error(c, RTSP_STATUS_METHOD);
 
  the_end:
-    len = url_close_dyn_buf(c->pb, &c->pb_buffer);
+    len = avio_close_dyn_buf(c->pb, &c->pb_buffer);
     c->pb = NULL; /* safety */
     if (len < 0) {
         /* XXX: cannot do more */
@@ -2941,11 +2940,9 @@ static int prepare_sdp_description(FFStream *stream, uint8_t **pbuffer,
         snprintf(avc->filename, 1024, "rtp://0.0.0.0");
     }
 
-#if !FF_API_MAX_STREAMS
     if (avc->nb_streams >= INT_MAX/sizeof(*avc->streams) ||
         !(avc->streams = av_malloc(avc->nb_streams * sizeof(*avc->streams))))
         goto sdp_done;
-#endif
     if (avc->nb_streams >= INT_MAX/sizeof(*avs) ||
         !(avs = av_malloc(avc->nb_streams * sizeof(*avs))))
         goto sdp_done;
@@ -2955,12 +2952,10 @@ static int prepare_sdp_description(FFStream *stream, uint8_t **pbuffer,
         avc->streams[i]->codec = stream->streams[i]->codec;
     }
     *pbuffer = av_mallocz(2048);
-    avf_sdp_create(&avc, 1, *pbuffer, 2048);
+    av_sdp_create(&avc, 1, *pbuffer, 2048);
 
  sdp_done:
-#if !FF_API_MAX_STREAMS
     av_free(avc->streams);
-#endif
     av_metadata_free(&avc->metadata);
     av_free(avc);
     av_free(avs);
@@ -3425,7 +3420,7 @@ static int rtp_new_av_stream(HTTPContext *c,
                      "rtp://%s:%d", ipaddr, ntohs(dest_addr->sin_port));
         }
 
-        if (url_open(&h, ctx->filename, URL_WRONLY) < 0)
+        if (url_open(&h, ctx->filename, AVIO_FLAG_WRITE) < 0)
             goto fail;
         c->rtp_handles[stream_index] = h;
         max_packet_size = url_get_max_packet_size(h);
@@ -3444,7 +3439,7 @@ static int rtp_new_av_stream(HTTPContext *c,
              c->stream->filename, stream_index, c->protocol);
 
     /* normally, no packets should be output here, but the packet size may be checked */
-    if (url_open_dyn_packet_buf(&ctx->pb, max_packet_size) < 0) {
+    if (ffio_open_dyn_packet_buf(&ctx->pb, max_packet_size) < 0) {
         /* XXX: close stream */
         goto fail;
     }
@@ -3456,7 +3451,7 @@ static int rtp_new_av_stream(HTTPContext *c,
         av_free(ctx);
         return -1;
     }
-    url_close_dyn_buf(ctx->pb, &dummy_buf);
+    avio_close_dyn_buf(ctx->pb, &dummy_buf);
     av_free(dummy_buf);
 
     c->rtp_ctx[stream_index] = ctx;
@@ -3682,7 +3677,7 @@ static void build_feed_streams(void)
     for(feed = first_feed; feed != NULL; feed = feed->next_feed) {
         int fd;
 
-        if (url_exist(feed->feed_filename)) {
+        if (avio_check(feed->feed_filename, AVIO_FLAG_READ) > 0) {
             /* See if it matches */
             AVFormatContext *s;
             int matches = 0;
@@ -3755,7 +3750,7 @@ static void build_feed_streams(void)
                 unlink(feed->feed_filename);
             }
         }
-        if (!url_exist(feed->feed_filename)) {
+        if (avio_check(feed->feed_filename, AVIO_FLAG_WRITE) <= 0) {
             AVFormatContext s1 = {0}, *s = &s1;
 
             if (feed->readonly) {
@@ -3765,7 +3760,7 @@ static void build_feed_streams(void)
             }
 
             /* only write the header of the ffm file */
-            if (avio_open(&s->pb, feed->feed_filename, URL_WRONLY) < 0) {
+            if (avio_open(&s->pb, feed->feed_filename, AVIO_FLAG_WRITE) < 0) {
                 http_log("Could not open output feed file '%s'\n",
                          feed->feed_filename);
                 exit(1);

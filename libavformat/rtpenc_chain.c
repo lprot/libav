@@ -2,25 +2,27 @@
  * RTP muxer chaining code
  * Copyright (c) 2010 Martin Storsjo
  *
- * This file is part of FFmpeg.
+ * This file is part of Libav.
  *
- * FFmpeg is free software; you can redistribute it and/or
+ * Libav is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
  * version 2.1 of the License, or (at your option) any later version.
  *
- * FFmpeg is distributed in the hope that it will be useful,
+ * Libav is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with FFmpeg; if not, write to the Free Software
+ * License along with Libav; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
 #include "avformat.h"
+#include "avio_internal.h"
 #include "rtpenc_chain.h"
+#include "avio_internal.h"
 
 AVFormatContext *ff_rtp_chain_mux_open(AVFormatContext *s, AVStream *st,
                                        URLContext *handle, int packet_size)
@@ -53,9 +55,9 @@ AVFormatContext *ff_rtp_chain_mux_open(AVFormatContext *s, AVStream *st,
     avcodec_copy_context(rtpctx->streams[0]->codec, st->codec);
 
     if (handle) {
-        url_fdopen(&rtpctx->pb, handle);
+        ffio_fdopen(&rtpctx->pb, handle);
     } else
-        url_open_dyn_packet_buf(&rtpctx->pb, packet_size);
+        ffio_open_dyn_packet_buf(&rtpctx->pb, packet_size);
     ret = av_write_header(rtpctx);
 
     if (ret) {
@@ -63,7 +65,7 @@ AVFormatContext *ff_rtp_chain_mux_open(AVFormatContext *s, AVStream *st,
             avio_close(rtpctx->pb);
         } else {
             uint8_t *ptr;
-            url_close_dyn_buf(rtpctx->pb, &ptr);
+            avio_close_dyn_buf(rtpctx->pb, &ptr);
             av_free(ptr);
         }
         avformat_free_context(rtpctx);

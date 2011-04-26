@@ -1,20 +1,20 @@
 /*
  * Copyright (C) 2006 Michael Niedermayer <michaelni@gmx.at>
  *
- * This file is part of FFmpeg.
+ * This file is part of Libav.
  *
- * FFmpeg is free software; you can redistribute it and/or modify
+ * Libav is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
  * (at your option) any later version.
  *
- * FFmpeg is distributed in the hope that it will be useful,
+ * Libav is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License along
- * with FFmpeg; if not, write to the Free Software Foundation, Inc.,
+ * with Libav; if not, write to the Free Software Foundation, Inc.,
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
@@ -105,7 +105,7 @@
 
 void RENAME(ff_yadif_filter_line)(uint8_t *dst,
                                   uint8_t *prev, uint8_t *cur, uint8_t *next,
-                                  int w, int refs, int parity, int mode)
+                                  int w, int prefs, int mrefs, int parity, int mode)
 {
     DECLARE_ALIGNED(16, uint8_t, tmp0[16]);
     DECLARE_ALIGNED(16, uint8_t, tmp1[16]);
@@ -226,8 +226,8 @@ void RENAME(ff_yadif_filter_line)(uint8_t *dst,
             :[prev] "r"(prev),\
              [cur]  "r"(cur),\
              [next] "r"(next),\
-             [prefs]"r"((x86_reg)refs),\
-             [mrefs]"r"((x86_reg)-refs),\
+             [prefs]"r"((x86_reg)prefs),\
+             [mrefs]"r"((x86_reg)mrefs),\
              [mode] "g"(mode)\
         );\
         __asm__ volatile(MOV" "MM"1, %0" :"=m"(*dst));\

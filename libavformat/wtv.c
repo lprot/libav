@@ -2,20 +2,20 @@
  * Windows Television (WTV) demuxer
  * Copyright (c) 2010-2011 Peter Ross <pross@xvid.org>
  *
- * This file is part of FFmpeg.
+ * This file is part of Libav.
  *
- * FFmpeg is free software; you can redistribute it and/or
+ * Libav is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
  * version 2.1 of the License, or (at your option) any later version.
  *
- * FFmpeg is distributed in the hope that it will be useful,
+ * Libav is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with FFmpeg; if not, write to the Free Software
+ * License along with Libav; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
@@ -675,7 +675,9 @@ static AVStream * parse_media_type(AVFormatContext *s, AVStream *st, int sid,
         if (!st)
             return NULL;
         if (!ff_guidcmp(formattype, format_waveformatex)) {
-            ff_get_wav_header(pb, st->codec, size);
+            int ret = ff_get_wav_header(pb, st->codec, size);
+            if (ret < 0)
+                return NULL;
         } else {
             if (ff_guidcmp(formattype, format_none))
                 av_log(s, AV_LOG_WARNING, "unknown formattype:"PRI_GUID"\n", ARG_GUID(formattype));
@@ -701,10 +703,10 @@ static AVStream * parse_media_type(AVFormatContext *s, AVStream *st, int sid,
             return NULL;
         if (!ff_guidcmp(formattype, format_videoinfo2)) {
             int consumed = parse_videoinfoheader2(s, st);
-            avio_seek(pb, FFMAX(size - consumed, 0), SEEK_CUR);
+            avio_skip(pb, FFMAX(size - consumed, 0));
         } else if (!ff_guidcmp(formattype, format_mpeg2_video)) {
             int consumed = parse_videoinfoheader2(s, st);
-            avio_seek(pb, FFMAX(size - consumed, 0), SEEK_CUR);
+            avio_skip(pb, FFMAX(size - consumed, 0));
         } else {
             if (ff_guidcmp(formattype, format_none))
                 av_log(s, AV_LOG_WARNING, "unknown formattype:"PRI_GUID"\n", ARG_GUID(formattype));
@@ -1061,7 +1063,7 @@ static int read_seek(AVFormatContext *s, int stream_index,
     int i;
 
     if ((flags & AVSEEK_FLAG_FRAME) || (flags & AVSEEK_FLAG_BYTE))
-        return AVERROR_NOTSUPP;
+        return AVERROR(ENOSYS);
 
     /* timestamp adjustment is required because wtv->pts values are absolute,
      * whereas AVIndexEntry->timestamp values are relative to epoch. */

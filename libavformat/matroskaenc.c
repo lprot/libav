@@ -2,20 +2,20 @@
  * Matroska muxer
  * Copyright (c) 2007 David Conrad
  *
- * This file is part of FFmpeg.
+ * This file is part of Libav.
  *
- * FFmpeg is free software; you can redistribute it and/or
+ * Libav is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
  * version 2.1 of the License, or (at your option) any later version.
  *
- * FFmpeg is distributed in the hope that it will be useful,
+ * Libav is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with FFmpeg; if not, write to the Free Software
+ * License along with Libav; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
@@ -438,29 +438,15 @@ static int put_xiph_codecpriv(AVFormatContext *s, AVIOContext *pb, AVCodecContex
 
 static void get_aac_sample_rates(AVFormatContext *s, AVCodecContext *codec, int *sample_rate, int *output_sample_rate)
 {
-    int sri;
+    MPEG4AudioConfig mp4ac;
 
-    if (codec->extradata_size < 2) {
-        av_log(s, AV_LOG_WARNING, "No AAC extradata, unable to determine samplerate.\n");
+    if (ff_mpeg4audio_get_config(&mp4ac, codec->extradata, codec->extradata_size) < 0) {
+        av_log(s, AV_LOG_WARNING, "Error parsing AAC extradata, unable to determine samplerate.\n");
         return;
     }
 
-    sri = ((codec->extradata[0] << 1) & 0xE) | (codec->extradata[1] >> 7);
-    if (sri > 12) {
-        av_log(s, AV_LOG_WARNING, "AAC samplerate index out of bounds\n");
-        return;
-    }
-    *sample_rate = ff_mpeg4audio_sample_rates[sri];
-
-    // if sbr, get output sample rate as well
-    if (codec->extradata_size == 5) {
-        sri = (codec->extradata[4] >> 3) & 0xF;
-        if (sri > 12) {
-            av_log(s, AV_LOG_WARNING, "AAC output samplerate index out of bounds\n");
-            return;
-        }
-        *output_sample_rate = ff_mpeg4audio_sample_rates[sri];
-    }
+    *sample_rate        = mp4ac.sample_rate;
+    *output_sample_rate = mp4ac.ext_sample_rate;
 }
 
 static int mkv_write_codecprivate(AVFormatContext *s, AVIOContext *pb, AVCodecContext *codec, int native_id, int qt_id)
@@ -469,7 +455,7 @@ static int mkv_write_codecprivate(AVFormatContext *s, AVIOContext *pb, AVCodecCo
     uint8_t *codecpriv;
     int ret, codecpriv_size;
 
-    ret = url_open_dyn_buf(&dyn_cp);
+    ret = avio_open_dyn_buf(&dyn_cp);
     if(ret < 0)
         return ret;
 
@@ -512,7 +498,7 @@ static int mkv_write_codecprivate(AVFormatContext *s, AVIOContext *pb, AVCodecCo
         ff_put_wav_header(dyn_cp, codec);
     }
 
-    codecpriv_size = url_close_dyn_buf(dyn_cp, &codecpriv);
+    codecpriv_size = avio_close_dyn_buf(dyn_cp, &codecpriv);
     if (codecpriv_size)
         put_ebml_binary(pb, MATROSKA_ID_CODECPRIVATE, codecpriv, codecpriv_size);
     av_free(codecpriv);
@@ -862,7 +848,7 @@ static int mkv_write_header(AVFormatContext *s)
         if (ret < 0) return ret;
     }
 
-    if (url_is_streamed(s->pb))
+    if (!s->pb->seekable)
         mkv_write_seekhead(pb, mkv->main_seekhead);
 
     mkv->cues = mkv_start_cues(mkv->segment_offset);
@@ -1017,7 +1003,7 @@ static void mkv_flush_dynbuf(AVFormatContext *s)
     if (!mkv->dyn_bc)
         return;
 
-    bufsize = url_close_dyn_buf(mkv->dyn_bc, &dyn_buf);
+    bufsize = avio_close_dyn_buf(mkv->dyn_bc, &dyn_buf);
     avio_write(s->pb, dyn_buf, bufsize);
     av_free(dyn_buf);
     mkv->dyn_bc = NULL;
@@ -1038,9 +1024,9 @@ static int mkv_write_packet_internal(AVFormatContext *s, AVPacket *pkt)
         return AVERROR(EINVAL);
     }
 
-    if (url_is_streamed(s->pb)) {
+    if (!s->pb->seekable) {
         if (!mkv->dyn_bc)
-            url_open_dyn_buf(&mkv->dyn_bc);
+            avio_open_dyn_buf(&mkv->dyn_bc);
         pb = mkv->dyn_bc;
     }
 
@@ -1090,16 +1076,16 @@ static int mkv_copy_packet(MatroskaMuxContext *mkv, const AVPacket *pkt)
 static int mkv_write_packet(AVFormatContext *s, AVPacket *pkt)
 {
     MatroskaMuxContext *mkv = s->priv_data;
-    AVIOContext *pb = url_is_streamed(s->pb) ? mkv->dyn_bc : s->pb;
+    AVIOContext *pb = s->pb->seekable ? s->pb : mkv->dyn_bc;
     AVCodecContext *codec = s->streams[pkt->stream_index]->codec;
     int ret, keyframe = !!(pkt->flags & AV_PKT_FLAG_KEY);
     int64_t ts = mkv->tracks[pkt->stream_index].write_dts ? pkt->dts : pkt->pts;
-    int cluster_size = avio_tell(pb) - (url_is_streamed(s->pb) ? 0 : mkv->cluster_pos);
+    int cluster_size = avio_tell(pb) - (s->pb->seekable ? mkv->cluster_pos : 0);
 
     // start a new cluster every 5 MB or 5 sec, or 32k / 1 sec for streaming or
     // after 4k and on a keyframe
     if (mkv->cluster_pos &&
-        ((url_is_streamed(s->pb) && (cluster_size > 32*1024 || ts > mkv->cluster_pts + 1000))
+        ((!s->pb->seekable && (cluster_size > 32*1024 || ts > mkv->cluster_pts + 1000))
          ||                      cluster_size > 5*1024*1024 || ts > mkv->cluster_pts + 5000
          || (codec->codec_type == AVMEDIA_TYPE_VIDEO && keyframe && cluster_size > 4*1024))) {
         av_log(s, AV_LOG_DEBUG, "Starting new cluster at offset %" PRIu64
@@ -1153,11 +1139,14 @@ static int mkv_write_trailer(AVFormatContext *s)
         end_ebml_master(pb, mkv->cluster);
     }
 
-    if (!url_is_streamed(pb)) {
-        cuespos = mkv_write_cues(pb, mkv->cues, s->nb_streams);
+    if (pb->seekable) {
+        if (mkv->cues->num_entries) {
+            cuespos = mkv_write_cues(pb, mkv->cues, s->nb_streams);
 
-        ret = mkv_add_seekhead_entry(mkv->main_seekhead, MATROSKA_ID_CUES    , cuespos);
-        if (ret < 0) return ret;
+            ret = mkv_add_seekhead_entry(mkv->main_seekhead, MATROSKA_ID_CUES, cuespos);
+            if (ret < 0) return ret;
+        }
+
         mkv_write_seekhead(pb, mkv->main_seekhead);
 
         // update the duration

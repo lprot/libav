@@ -16,20 +16,20 @@
  * Many thanks to Dan Dennedy <dan@dennedy.org> for providing wealth
  * of DV technical info.
  *
- * This file is part of FFmpeg.
+ * This file is part of Libav.
  *
- * FFmpeg is free software; you can redistribute it and/or
+ * Libav is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
  * version 2.1 of the License, or (at your option) any later version.
  *
- * FFmpeg is distributed in the hope that it will be useful,
+ * Libav is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with FFmpeg; if not, write to the Free Software
+ * License along with Libav; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
@@ -787,7 +787,7 @@ static av_always_inline int dv_init_enc_block(EncBlockInfo* bi, uint8_t *data, i
        method suggested in SMPTE 314M Table 22, and an improved
        method. The SMPTE method is very conservative; it assigns class
        3 (i.e. severe quantization) to any block where the largest AC
-       component is greater than 36. FFmpeg's DV encoder tracks AC bit
+       component is greater than 36. Libav's DV encoder tracks AC bit
        consumption precisely, so there is no need to bias most blocks
        towards strongly lossy compression. Instead, we assign class 2
        to most blocks, and use class 3 only when strictly necessary
@@ -795,7 +795,7 @@ static av_always_inline int dv_init_enc_block(EncBlockInfo* bi, uint8_t *data, i
 
 #if 0 /* SMPTE spec method */
     static const int classes[] = {12, 24, 36, 0xffff};
-#else /* improved FFmpeg method */
+#else /* improved Libav method */
     static const int classes[] = {-1, -1, 255, 0xffff};
 #endif
     int max  = classes[0];
@@ -1297,6 +1297,7 @@ AVCodec ff_dvvideo_encoder = {
     sizeof(DVVideoContext),
     dvvideo_init_encoder,
     dvvideo_encode_frame,
+    .capabilities = CODEC_CAP_SLICE_THREADS,
     .pix_fmts  = (const enum PixelFormat[]) {PIX_FMT_YUV411P, PIX_FMT_YUV422P, PIX_FMT_YUV420P, PIX_FMT_NONE},
     .long_name = NULL_IF_CONFIG_SMALL("DV (Digital Video)"),
 };
@@ -1312,7 +1313,7 @@ AVCodec ff_dvvideo_decoder = {
     NULL,
     dvvideo_close,
     dvvideo_decode_frame,
-    CODEC_CAP_DR1,
+    CODEC_CAP_DR1 | CODEC_CAP_SLICE_THREADS,
     NULL,
     .max_lowres = 3,
     .long_name = NULL_IF_CONFIG_SMALL("DV (Digital Video)"),

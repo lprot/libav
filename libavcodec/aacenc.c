@@ -2,20 +2,20 @@
  * AAC encoder
  * Copyright (C) 2008 Konstantin Shishkov
  *
- * This file is part of FFmpeg.
+ * This file is part of Libav.
  *
- * FFmpeg is free software; you can redistribute it and/or
+ * Libav is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
  * version 2.1 of the License, or (at your option) any later version.
  *
- * FFmpeg is distributed in the hope that it will be useful,
+ * Libav is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with FFmpeg; if not, write to the Free Software
+ * License along with Libav; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
@@ -34,6 +34,8 @@
 #include "put_bits.h"
 #include "dsputil.h"
 #include "mpeg4audio.h"
+#include "kbdwin.h"
+#include "sinewin.h"
 
 #include "aac.h"
 #include "aactab.h"
@@ -250,7 +252,7 @@ static void apply_window_and_mdct(AVCodecContext *avctx, AACEncContext *s,
             for (i = 0; i < 1024; i++)
                 sce->saved[i] = audio[i * chans];
         }
-        ff_mdct_calc(&s->mdct1024, sce->coeffs, output);
+        s->mdct1024.mdct_calc(&s->mdct1024, sce->coeffs, output);
     } else {
         for (k = 0; k < 1024; k += 128) {
             for (i = 448 + k; i < 448 + k + 256; i++)
@@ -259,7 +261,7 @@ static void apply_window_and_mdct(AVCodecContext *avctx, AACEncContext *s,
                                          : audio[(i-1024)*chans];
             s->dsp.vector_fmul        (output,     output, k ?  swindow : pwindow, 128);
             s->dsp.vector_fmul_reverse(output+128, output+128, swindow, 128);
-            ff_mdct_calc(&s->mdct128, sce->coeffs + k, output);
+            s->mdct128.mdct_calc(&s->mdct128, sce->coeffs + k, output);
         }
         for (i = 0; i < 1024; i++)
             sce->saved[i] = audio[i * chans];
@@ -604,8 +606,10 @@ static int aac_encode_frame(AVCodecContext *avctx,
         }
 
         frame_bits = put_bits_count(&s->pb);
-        if (frame_bits <= 6144 * avctx->channels - 3)
+        if (frame_bits <= 6144 * avctx->channels - 3) {
+            s->psy.bitres.bits = frame_bits / avctx->channels;
             break;
+        }
 
         s->lambda *= avctx->bit_rate * 1024.0f / avctx->sample_rate / frame_bits;
 

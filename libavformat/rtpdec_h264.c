@@ -2,20 +2,20 @@
  * RTP H264 Protocol (RFC3984)
  * Copyright (c) 2006 Ryan Martell
  *
- * This file is part of FFmpeg.
+ * This file is part of Libav.
  *
- * FFmpeg is free software; you can redistribute it and/or
+ * Libav is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
  * version 2.1 of the License, or (at your option) any later version.
  *
- * FFmpeg is distributed in the hope that it will be useful,
+ * Libav is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with FFmpeg; if not, write to the Free Software
+ * License along with Libav; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
@@ -398,7 +398,7 @@ RTPDynamicProtocolHandler ff_h264_dynamic_handler = {
     .codec_type       = AVMEDIA_TYPE_VIDEO,
     .codec_id         = CODEC_ID_H264,
     .parse_sdp_a_line = parse_h264_sdp_line,
-    .open             = h264_new_context,
-    .close            = h264_free_context,
+    .alloc            = h264_new_context,
+    .free             = h264_free_context,
     .parse_packet     = h264_handle_packet
 };

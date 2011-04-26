@@ -3,20 +3,20 @@
  * Copyright (c) 2004-2006 Michael Niedermayer
  * Copyright (c) 2003 Alex Beregszaszi
  *
- * This file is part of FFmpeg.
+ * This file is part of Libav.
  *
- * FFmpeg is free software; you can redistribute it and/or
+ * Libav is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
  * version 2.1 of the License, or (at your option) any later version.
  *
- * FFmpeg is distributed in the hope that it will be useful,
+ * Libav is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with FFmpeg; if not, write to the Free Software
+ * License along with Libav; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
@@ -30,11 +30,7 @@
 #undef NDEBUG
 #include <assert.h>
 
-#if FF_API_MAX_STREAMS
-#define NUT_MAX_STREAMS MAX_STREAMS
-#else
 #define NUT_MAX_STREAMS 256    /* arbitrary sanity check value */
-#endif
 
 static int get_str(AVIOContext *bc, char *string, unsigned int maxlen){
     unsigned int len= ffio_read_varlen(bc);
@@ -104,14 +100,14 @@ static int get_packetheader(NUTContext *nut, AVIOContext *bc, int calculate_chec
     startcode= av_be2ne64(startcode);
     startcode= ff_crc04C11DB7_update(0, (uint8_t*)&startcode, 8);
 
-    init_checksum(bc, ff_crc04C11DB7_update, startcode);
+    ffio_init_checksum(bc, ff_crc04C11DB7_update, startcode);
     size= ffio_read_varlen(bc);
     if(size > 4096)
         avio_rb32(bc);
-    if(get_checksum(bc) && size > 4096)
+    if(ffio_get_checksum(bc) && size > 4096)
         return -1;
 
-    init_checksum(bc, calculate_checksum ? ff_crc04C11DB7_update : NULL, 0);
+    ffio_init_checksum(bc, calculate_checksum ? ff_crc04C11DB7_update : NULL, 0);
 
     return size;
 }
@@ -285,7 +281,7 @@ static int decode_main_header(NUTContext *nut){
         assert(nut->header_len[0]==0);
     }
 
-    if(skip_reserved(bc, end) || get_checksum(bc)){
+    if(skip_reserved(bc, end) || ffio_get_checksum(bc)){
         av_log(s, AV_LOG_ERROR, "main header checksum mismatch\n");
         return AVERROR_INVALIDDATA;
     }
@@ -374,7 +370,7 @@ static int decode_stream_header(NUTContext *nut){
         ffio_read_varlen(bc); // samplerate_den
         GET_V(st->codec->channels, tmp > 0)
     }
-    if(skip_reserved(bc, end) || get_checksum(bc)){
+    if(skip_reserved(bc, end) || ffio_get_checksum(bc)){
         av_log(s, AV_LOG_ERROR, "stream header %d checksum mismatch\n", stream_id);
         return -1;
     }
@@ -469,7 +465,7 @@ static int decode_info_header(NUTContext *nut){
         }
     }
 
-    if(skip_reserved(bc, end) || get_checksum(bc)){
+    if(skip_reserved(bc, end) || ffio_get_checksum(bc)){
         av_log(s, AV_LOG_ERROR, "info header checksum mismatch\n");
         return -1;
     }
@@ -493,7 +489,7 @@ static int decode_syncpoint(NUTContext *nut, int64_t *ts, int64_t *back_ptr){
 
     ff_nut_reset_ts(nut, nut->time_base[tmp % nut->time_base_count], tmp / nut->time_base_count);
 
-    if(skip_reserved(bc, end) || get_checksum(bc)){
+    if(skip_reserved(bc, end) || ffio_get_checksum(bc)){
         av_log(s, AV_LOG_ERROR, "sync point checksum mismatch\n");
         return -1;
     }
@@ -590,7 +586,7 @@ static int find_and_decode_index(NUTContext *nut){
         }
     }
 
-    if(skip_reserved(bc, end) || get_checksum(bc)){
+    if(skip_reserved(bc, end) || ffio_get_checksum(bc)){
         av_log(s, AV_LOG_ERROR, "index checksum mismatch\n");
         goto fail;
     }
@@ -653,7 +649,7 @@ static int nut_read_header(AVFormatContext *s, AVFormatParameters *ap)
 
     s->data_offset= pos-8;
 
-    if(!url_is_streamed(bc)){
+    if(bc->seekable){
         int64_t orig_pos= avio_tell(bc);
         find_and_decode_index(nut);
         avio_seek(bc, orig_pos, SEEK_SET);

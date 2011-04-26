@@ -2,20 +2,20 @@
  * ASF compatible demuxer
  * Copyright (c) 2000, 2001 Fabrice Bellard
  *
- * This file is part of FFmpeg.
+ * This file is part of Libav.
  *
- * FFmpeg is free software; you can redistribute it and/or
+ * Libav is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
  * version 2.1 of the License, or (at your option) any later version.
  *
- * FFmpeg is distributed in the hope that it will be useful,
+ * Libav is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with FFmpeg; if not, write to the Free Software
+ * License along with Libav; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
@@ -25,12 +25,11 @@
 #include "libavutil/avstring.h"
 #include "libavcodec/mpegaudio.h"
 #include "avformat.h"
+#include "avio_internal.h"
 #include "riff.h"
 #include "asf.h"
 #include "asfcrypt.h"
 #include "avlanguage.h"
-
-void ff_mms_set_stream_selection(URLContext *h, AVFormatContext *format);
 
 typedef struct {
     int asfid2avid[128];                 ///< conversion table from asf ID 2 AVStream ID
@@ -289,7 +288,9 @@ static int asf_read_stream_properties(AVFormatContext *s, int64_t size)
 
     st->codec->codec_type = type;
     if (type == AVMEDIA_TYPE_AUDIO) {
-        ff_get_wav_header(pb, st->codec, type_specific_size);
+        int ret = ff_get_wav_header(pb, st->codec, type_specific_size);
+        if (ret < 0)
+            return ret;
         if (is_dvr_ms_audio) {
             // codec_id and codec_tag are unreliable in dvr_ms
             // files. Set them later by probing stream.
@@ -364,15 +365,14 @@ static int asf_read_stream_properties(AVFormatContext *s, int64_t size)
         /* This is true for all paletted codecs implemented in ffmpeg */
         if (st->codec->extradata_size && (st->codec->bits_per_coded_sample <= 8)) {
             int av_unused i;
-            st->codec->palctrl = av_mallocz(sizeof(AVPaletteControl));
 #if HAVE_BIGENDIAN
             for (i = 0; i < FFMIN(st->codec->extradata_size, AVPALETTE_SIZE)/4; i++)
-                st->codec->palctrl->palette[i] = av_bswap32(((uint32_t*)st->codec->extradata)[i]);
+                asf_st->palette[i] = av_bswap32(((uint32_t*)st->codec->extradata)[i]);
 #else
-            memcpy(st->codec->palctrl->palette, st->codec->extradata,
-                    FFMIN(st->codec->extradata_size, AVPALETTE_SIZE));
+            memcpy(asf_st->palette, st->codec->extradata,
+                   FFMIN(st->codec->extradata_size, AVPALETTE_SIZE));
 #endif
-            st->codec->palctrl->palette_changed = 1;
+            asf_st->palette_changed = 1;
         }
 
         st->codec->codec_tag = tag1;
@@ -965,6 +965,17 @@ static int ff_asf_parse_packet(AVFormatContext *s, AVIOContext *pb, AVPacket *pk
             asf_st->pkt.stream_index = asf->stream_index;
             asf_st->pkt.pos =
             asf_st->packet_pos= asf->packet_pos;
+            if (asf_st->pkt.data && asf_st->palette_changed) {
+                uint8_t *pal;
+                pal = av_packet_new_side_data(pkt, AV_PKT_DATA_PALETTE,
+                                              AVPALETTE_SIZE);
+                if (!pal) {
+                    av_log(s, AV_LOG_ERROR, "Cannot append palette to packet\n");
+                } else {
+                    memcpy(pal, asf_st->palette, AVPALETTE_SIZE);
+                    asf_st->palette_changed = 0;
+                }
+            }
 //printf("new packet: stream:%d key:%d packet_key:%d audio:%d size:%d\n",
 //asf->stream_index, asf->packet_key_frame, asf_st->pkt.flags & AV_PKT_FLAG_KEY,
 //s->streams[asf->stream_index]->codec->codec_type == AVMEDIA_TYPE_AUDIO, asf->packet_obj_size);
@@ -1121,13 +1132,8 @@ static void asf_reset_header(AVFormatContext *s)
 
 static int asf_read_close(AVFormatContext *s)
 {
-    int i;
-
     asf_reset_header(s);
-    for(i=0;i<s->nb_streams;i++) {
-        AVStream *st = s->streams[i];
-        av_free(st->codec->palctrl);
-    }
+
     return 0;
 }
 
@@ -1218,10 +1224,10 @@ static void asf_build_simple_index(AVFormatContext *s, int stream_index)
             int pktnum=avio_rl32(s->pb);
             int pktct =avio_rl16(s->pb);
             int64_t pos      = s->data_offset + s->packet_size*(int64_t)pktnum;
-            int64_t index_pts= av_rescale(itime, i, 10000);
+            int64_t index_pts= FFMAX(av_rescale(itime, i, 10000) - asf->hdr.preroll, 0);
 
             if(pos != last_pos){
-            av_log(s, AV_LOG_DEBUG, "pktnum:%d, pktct:%d\n", pktnum, pktct);
+            av_log(s, AV_LOG_DEBUG, "pktnum:%d, pktct:%d  pts: %"PRId64"\n", pktnum, pktct, index_pts);
             av_add_index_entry(s->streams[stream_index], pos, index_pts, s->packet_size, 0, AVINDEX_KEYFRAME);
             last_pos=pos;
             }
@@ -1243,7 +1249,7 @@ static int asf_read_seek(AVFormatContext *s, int stream_index, int64_t pts, int 
 
     /* Try using the protocol's read_seek if available */
     if(s->pb) {
-        int ret = av_url_read_fseek(s->pb, stream_index, pts, flags);
+        int ret = avio_seek_time(s->pb, stream_index, pts, flags);
         if(ret >= 0)
             asf_reset_header(s);
         if (ret != AVERROR(ENOSYS))
@@ -1263,27 +1269,6 @@ static int asf_read_seek(AVFormatContext *s, int stream_index, int64_t pts, int 
 
         /* find the position */
         pos = st->index_entries[index].pos;
-
-    // various attempts to find key frame have failed so far
-    //    asf_reset_header(s);
-    //    avio_seek(s->pb, pos, SEEK_SET);
-    //    key_pos = pos;
-    //     for(i=0;i<16;i++){
-    //         pos = avio_tell(s->pb);
-    //         if (av_read_frame(s, &pkt) < 0){
-    //             av_log(s, AV_LOG_INFO, "seek failed\n");
-    //             return -1;
-    //         }
-    //         asf_st = s->streams[stream_index]->priv_data;
-    //         pos += st->parser->frame_offset;
-    //
-    //         if (pkt.size > b) {
-    //             b = pkt.size;
-    //             key_pos = pos;
-    //         }
-    //
-    //         av_free_packet(&pkt);
-    //     }
 
         /* do the seek */
         av_log(s, AV_LOG_DEBUG, "SEEKTO: %"PRId64"\n", pos);

@@ -2,20 +2,20 @@
  * Ogg muxer
  * Copyright (c) 2007 Baptiste Coudurier <baptiste dot coudurier at free dot fr>
  *
- * This file is part of FFmpeg.
+ * This file is part of Libav.
  *
- * FFmpeg is free software; you can redistribute it and/or
+ * Libav is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
  * version 2.1 of the License, or (at your option) any later version.
  *
- * FFmpeg is distributed in the hope that it will be useful,
+ * Libav is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with FFmpeg; if not, write to the Free Software
+ * License along with Libav; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
@@ -68,7 +68,7 @@ typedef struct {
 static void ogg_update_checksum(AVFormatContext *s, AVIOContext *pb, int64_t crc_offset)
 {
     int64_t pos = avio_tell(pb);
-    uint32_t checksum = get_checksum(pb);
+    uint32_t checksum = ffio_get_checksum(pb);
     avio_seek(pb, crc_offset, SEEK_SET);
     avio_wb32(pb, checksum);
     avio_seek(pb, pos, SEEK_SET);
@@ -82,10 +82,10 @@ static int ogg_write_page(AVFormatContext *s, OGGPage *page, int extra_flags)
     int ret, size;
     uint8_t *buf;
 
-    ret = url_open_dyn_buf(&pb);
+    ret = avio_open_dyn_buf(&pb);
     if (ret < 0)
         return ret;
-    init_checksum(pb, ff_crc04C11DB7_update, 0);
+    ffio_init_checksum(pb, ff_crc04C11DB7_update, 0);
     ffio_wfourcc(pb, "OggS");
     avio_w8(pb, 0);
     avio_w8(pb, page->flags | extra_flags);
@@ -101,7 +101,7 @@ static int ogg_write_page(AVFormatContext *s, OGGPage *page, int extra_flags)
     ogg_update_checksum(s, pb, crc_offset);
     avio_flush(pb);
 
-    size = url_close_dyn_buf(pb, &buf);
+    size = avio_close_dyn_buf(pb, &buf);
     if (size < 0)
         return size;
 

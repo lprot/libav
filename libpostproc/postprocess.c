@@ -3,20 +3,20 @@
  *
  * AltiVec optimizations (C) 2004 Romain Dolbeau <romain@dolbeau.org>
  *
- * This file is part of FFmpeg.
+ * This file is part of Libav.
  *
- * FFmpeg is free software; you can redistribute it and/or modify
+ * Libav is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
  * (at your option) any later version.
  *
- * FFmpeg is distributed in the hope that it will be useful,
+ * Libav is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with FFmpeg; if not, write to the Free Software
+ * along with Libav; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
@@ -71,7 +71,7 @@ try to unroll inner for(x=0 ... loop to avoid these damn if(x ... checks
 ...
 */
 
-//Changelog: use the Subversion log
+//Changelog: use git log
 
 #include "config.h"
 #include "libavutil/avutil.h"
@@ -695,11 +695,7 @@ static inline void postProcess(const uint8_t src[], int srcStride, uint8_t dst[]
 
 /* -pp Command line Help
 */
-#if LIBPOSTPROC_VERSION_INT < (52<<16)
-const char *const pp_help=
-#else
 const char pp_help[] =
-#endif
 "Available postprocessing filters:\n"
 "Filters                        Options\n"
 "short  long name       short   long option     Description\n"

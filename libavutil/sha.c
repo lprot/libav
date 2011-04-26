@@ -4,20 +4,20 @@
  * based on public domain SHA-1 code by Steve Reid <steve@edmweb.com>
  * and on BSD-licensed SHA-2 code by Aaron D. Gifford
  *
- * This file is part of FFmpeg.
+ * This file is part of Libav.
  *
- * FFmpeg is free software; you can redistribute it and/or
+ * Libav is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
  * version 2.1 of the License, or (at your option) any later version.
  *
- * FFmpeg is distributed in the hope that it will be useful,
+ * Libav is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with FFmpeg; if not, write to the Free Software
+ * License along with Libav; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
@@ -25,7 +25,6 @@
 #include "avutil.h"
 #include "bswap.h"
 #include "sha.h"
-#include "sha1.h"
 #include "intreadwrite.h"
 
 /** hash context */
@@ -323,29 +322,6 @@ void av_sha_final(AVSHA* ctx, uint8_t *digest)
     for (i = 0; i < ctx->digest_len; i++)
         AV_WB32(digest + i*4, ctx->state[i]);
 }
-
-#if LIBAVUTIL_VERSION_MAJOR < 51
-struct AVSHA1 {
-    AVSHA sha;
-};
-
-const int av_sha1_size = sizeof(struct AVSHA1);
-
-void av_sha1_init(struct AVSHA1* context)
-{
-    av_sha_init(&context->sha, 160);
-}
-
-void av_sha1_update(struct AVSHA1* context, const uint8_t* data, unsigned int len)
-{
-    av_sha_update(&context->sha, data, len);
-}
-
-void av_sha1_final(struct AVSHA1* context, uint8_t digest[20])
-{
-    av_sha_final(&context->sha, digest);
-}
-#endif
 
 #ifdef TEST
 #include <stdio.h>

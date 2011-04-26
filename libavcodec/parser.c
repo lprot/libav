@@ -3,20 +3,20 @@
  * Copyright (c) 2003 Fabrice Bellard
  * Copyright (c) 2003 Michael Niedermayer
  *
- * This file is part of FFmpeg.
+ * This file is part of Libav.
  *
- * FFmpeg is free software; you can redistribute it and/or
+ * Libav is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
  * version 2.1 of the License, or (at your option) any later version.
  *
- * FFmpeg is distributed in the hope that it will be useful,
+ * Libav is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with FFmpeg; if not, write to the Free Software
+ * License along with Libav; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
@@ -103,41 +103,6 @@ void ff_fetch_timestamp(AVCodecParserContext *s, int off, int remove){
                 break;
         }
     }
-}
-
-/**
- *
- * @param buf           input
- * @param buf_size      input length, to signal EOF, this should be 0 (so that the last frame can be output)
- * @param pts           input presentation timestamp
- * @param dts           input decoding timestamp
- * @param poutbuf       will contain a pointer to the first byte of the output frame
- * @param poutbuf_size  will contain the length of the output frame
- * @return the number of bytes of the input bitstream used
- *
- * Example:
- * @code
- *   while(in_len){
- *       len = av_parser_parse(myparser, AVCodecContext, &data, &size,
- *                                       in_data, in_len,
- *                                       pts, dts);
- *       in_data += len;
- *       in_len  -= len;
- *
- *       if(size)
- *          decode_frame(data, size);
- *   }
- * @endcode
- *
- * @deprecated Use av_parser_parse2() instead.
- */
-int av_parser_parse(AVCodecParserContext *s,
-                    AVCodecContext *avctx,
-                    uint8_t **poutbuf, int *poutbuf_size,
-                    const uint8_t *buf, int buf_size,
-                    int64_t pts, int64_t dts)
-{
-    return av_parser_parse2(s, avctx, poutbuf, poutbuf_size, buf, buf_size, pts, dts, AV_NOPTS_VALUE);
 }
 
 int av_parser_parse2(AVCodecParserContext *s,

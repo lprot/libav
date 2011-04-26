@@ -6,20 +6,20 @@
  * RF64 demuxer
  * Copyright (c) 2009 Daniel Verkamp
  *
- * This file is part of FFmpeg.
+ * This file is part of Libav.
  *
- * FFmpeg is free software; you can redistribute it and/or
+ * Libav is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
  * version 2.1 of the License, or (at your option) any later version.
  *
- * FFmpeg is distributed in the hope that it will be useful,
+ * Libav is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with FFmpeg; if not, write to the Free Software
+ * License along with Libav; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 #include "avformat.h"
@@ -58,7 +58,7 @@ static int wav_write_header(AVFormatContext *s)
     ff_end_tag(pb, fmt);
 
     if (s->streams[0]->codec->codec_tag != 0x01 /* hence for all other than PCM */
-        && !url_is_streamed(s->pb)) {
+        && s->pb->seekable) {
         fact = ff_start_tag(pb, "fact");
         avio_wl32(pb, 0);
         ff_end_tag(pb, fact);
@@ -98,7 +98,7 @@ static int wav_write_trailer(AVFormatContext *s)
 
     avio_flush(pb);
 
-    if (!url_is_streamed(s->pb)) {
+    if (s->pb->seekable) {
         ff_end_tag(pb, wav->data);
 
         /* update file size */
@@ -196,6 +196,7 @@ static int wav_read_header(AVFormatContext *s,
     AVIOContext *pb = s->pb;
     AVStream *st;
     WAVContext *wav = s->priv_data;
+    int ret;
 
     /* check RIFF header */
     tag = avio_rl32(pb);
@@ -228,7 +229,9 @@ static int wav_read_header(AVFormatContext *s,
     if (!st)
         return AVERROR(ENOMEM);
 
-    ff_get_wav_header(pb, st->codec, size);
+    ret = ff_get_wav_header(pb, st->codec, size);
+    if (ret < 0)
+        return ret;
     st->need_parsing = AVSTREAM_PARSE_FULL;
 
     av_set_pts_info(st, 64, 1, st->codec->sample_rate);
@@ -384,6 +387,7 @@ static int w64_read_header(AVFormatContext *s, AVFormatParameters *ap)
     WAVContext    *wav = s->priv_data;
     AVStream *st;
     uint8_t guid[16];
+    int ret;
 
     avio_read(pb, guid, 16);
     if (memcmp(guid, guid_riff, 16))
@@ -409,7 +413,9 @@ static int w64_read_header(AVFormatContext *s, AVFormatParameters *ap)
         return AVERROR(ENOMEM);
 
     /* subtract chunk header size - normal wav file doesn't count it */
-    ff_get_wav_header(pb, st->codec, size - 24);
+    ret = ff_get_wav_header(pb, st->codec, size - 24);
+    if (ret < 0)
+        return ret;
     avio_skip(pb, FFALIGN(size, INT64_C(8)) - size);
 
     st->need_parsing = AVSTREAM_PARSE_FULL;

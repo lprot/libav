@@ -2,20 +2,20 @@
  * ID3v2 header parser
  * Copyright (c) 2003 Fabrice Bellard
  *
- * This file is part of FFmpeg.
+ * This file is part of Libav.
  *
- * FFmpeg is free software; you can redistribute it and/or
+ * Libav is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
  * version 2.1 of the License, or (at your option) any later version.
  *
- * FFmpeg is distributed in the hope that it will be useful,
+ * Libav is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with FFmpeg; if not, write to the Free Software
+ * License along with Libav; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
@@ -186,9 +186,9 @@ static void ff_id3v2_parse(AVFormatContext *s, int len, uint8_t version, uint8_t
 {
     int isv34, tlen, unsync;
     char tag[5];
-    int64_t next;
+    int64_t next, end = avio_tell(s->pb) + len;
     int taghdrlen;
-    const char *reason;
+    const char *reason = NULL;
     AVIOContext pb;
     unsigned char *buffer = NULL;
     int buffer_size = 0;
@@ -237,11 +237,11 @@ static void ff_id3v2_parse(AVFormatContext *s, int len, uint8_t version, uint8_t
             tag[3] = 0;
             tlen = avio_rb24(s->pb);
         }
-        len -= taghdrlen + tlen;
-
-        if (len < 0)
+        if (tlen < 0 || tlen > len - taghdrlen) {
+            av_log(s, AV_LOG_WARNING, "Invalid size in frame %s, skipping the rest of tag.\n", tag);
             break;
-
+        }
+        len -= taghdrlen + tlen;
         next = avio_tell(s->pb) + tlen;
 
         if (tflags & ID3v2_FLAG_DATALEN) {
@@ -279,20 +279,15 @@ static void ff_id3v2_parse(AVFormatContext *s, int len, uint8_t version, uint8_t
         avio_seek(s->pb, next, SEEK_SET);
     }
 
-    if (len > 0) {
-        /* Skip padding */
-        avio_skip(s->pb, len);
-    }
     if (version == 4 && flags & 0x10) /* Footer preset, always 10 bytes, skip over it */
-        avio_skip(s->pb, 10);
-
-    av_free(buffer);
-    return;
+        end += 10;
 
   error:
-    av_log(s, AV_LOG_INFO, "ID3v2.%d tag skipped, cannot handle %s\n", version, reason);
-    avio_seek(s->pb, len, SEEK_CUR);
+    if (reason)
+        av_log(s, AV_LOG_INFO, "ID3v2.%d tag skipped, cannot handle %s\n", version, reason);
+    avio_seek(s->pb, end, SEEK_SET);
     av_free(buffer);
+    return;
 }
 
 void ff_id3v2_read(AVFormatContext *s, const char *magic)

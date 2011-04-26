@@ -3,20 +3,20 @@
  * Copyright (c) 2007 Benjamin Zores <ben@geexbox.org>
  *  based upon libdemac from Dave Chapman.
  *
- * This file is part of FFmpeg.
+ * This file is part of Libav.
  *
- * FFmpeg is free software; you can redistribute it and/or
+ * Libav is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
  * version 2.1 of the License, or (at your option) any later version.
  *
- * FFmpeg is distributed in the hope that it will be useful,
+ * Libav is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with FFmpeg; if not, write to the Free Software
+ * License along with Libav; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
@@ -250,6 +250,11 @@ static int ape_read_header(AVFormatContext * s, AVFormatParameters * ap)
         av_log(s, AV_LOG_ERROR, "Too many frames: %d\n", ape->totalframes);
         return -1;
     }
+    if (ape->seektablelength && (ape->seektablelength / sizeof(*ape->seektable)) < ape->totalframes) {
+        av_log(s, AV_LOG_ERROR, "Number of seek entries is less than number of frames: %d vs. %d\n",
+               ape->seektablelength / sizeof(*ape->seektable), ape->totalframes);
+        return AVERROR_INVALIDDATA;
+    }
     ape->frames       = av_malloc(ape->totalframes * sizeof(APEFrame));
     if(!ape->frames)
         return AVERROR(ENOMEM);
@@ -291,7 +296,7 @@ static int ape_read_header(AVFormatContext * s, AVFormatParameters * ap)
     ape_dumpinfo(s, ape);
 
     /* try to read APE tags */
-    if (!url_is_streamed(pb)) {
+    if (pb->seekable) {
         ff_ape_parse_tag(s);
         avio_seek(pb, 0, SEEK_SET);
     }

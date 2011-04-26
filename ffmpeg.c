@@ -1,21 +1,21 @@
 /*
- * FFmpeg main
+ * ffmpeg main
  * Copyright (c) 2000-2003 Fabrice Bellard
  *
- * This file is part of FFmpeg.
+ * This file is part of Libav.
  *
- * FFmpeg is free software; you can redistribute it and/or
+ * Libav is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
  * version 2.1 of the License, or (at your option) any later version.
  *
- * FFmpeg is distributed in the hope that it will be useful,
+ * Libav is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with FFmpeg; if not, write to the Free Software
+ * License along with Libav; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
@@ -34,7 +34,7 @@
 #include "libavformat/avformat.h"
 #include "libavdevice/avdevice.h"
 #include "libswscale/swscale.h"
-#include "libavcodec/opt.h"
+#include "libavutil/opt.h"
 #include "libavcodec/audioconvert.h"
 #include "libavutil/audioconvert.h"
 #include "libavutil/parseutils.h"
@@ -69,12 +69,7 @@
 #include <sys/select.h>
 #endif
 
-#if HAVE_TERMIOS_H
-#include <fcntl.h>
-#include <sys/ioctl.h>
-#include <sys/time.h>
-#include <termios.h>
-#elif HAVE_CONIO_H
+#if HAVE_KBHIT
 #include <conio.h>
 #endif
 #include <time.h>
@@ -83,7 +78,7 @@
 
 #include "libavutil/avassert.h"
 
-const char program_name[] = "FFmpeg";
+const char program_name[] = "ffmpeg";
 const int program_birth_year = 2000;
 
 /* select an input stream for an output stream */
@@ -111,9 +106,9 @@ typedef struct AVChapterMap {
 static const OptionDef options[];
 
 #define MAX_FILES 100
-#if !FF_API_MAX_STREAMS
 #define MAX_STREAMS 1024    /* arbitrary sanity check value */
-#endif
+
+#define FFM_PACKET_SIZE 4096 //XXX a duplicate of the line in ffm.h
 
 static const char *last_asked_format = NULL;
 static AVFormatContext *input_files[MAX_FILES];
@@ -340,12 +335,6 @@ typedef struct AVInputFile {
     int nb_streams;       /* nb streams we are aware of */
 } AVInputFile;
 
-#if HAVE_TERMIOS_H
-
-/* init terminal so that we can grab keys */
-static struct termios oldtty;
-#endif
-
 #if CONFIG_AVFILTER
 
 static int configure_filters(AVInputStream *ist, AVOutputStream *ost)
@@ -355,13 +344,21 @@ static int configure_filters(AVInputStream *ist, AVOutputStream *ost)
     AVCodecContext *codec = ost->st->codec;
     AVCodecContext *icodec = ist->st->codec;
     FFSinkContext ffsink_ctx = { .pix_fmt = codec->pix_fmt };
+    AVRational sample_aspect_ratio;
     char args[255];
     int ret;
 
     graph = avfilter_graph_alloc();
 
-    snprintf(args, 255, "%d:%d:%d:%d:%d", ist->st->codec->width,
-             ist->st->codec->height, ist->st->codec->pix_fmt, 1, AV_TIME_BASE);
+    if (ist->st->sample_aspect_ratio.num){
+        sample_aspect_ratio = ist->st->sample_aspect_ratio;
+    }else
+        sample_aspect_ratio = ist->st->codec->sample_aspect_ratio;
+
+    snprintf(args, 255, "%d:%d:%d:%d:%d:%d:%d", ist->st->codec->width,
+             ist->st->codec->height, ist->st->codec->pix_fmt, 1, AV_TIME_BASE,
+             sample_aspect_ratio.num, sample_aspect_ratio.den);
+
     ret = avfilter_graph_create_filter(&ist->input_video_filter, avfilter_get_by_name("buffer"),
                                        "src", args, NULL, graph);
     if (ret < 0)
@@ -415,6 +412,8 @@ static int configure_filters(AVInputStream *ist, AVOutputStream *ost)
 
     codec->width  = ist->output_video_filter->inputs[0]->w;
     codec->height = ist->output_video_filter->inputs[0]->h;
+    codec->sample_aspect_ratio = ost->st->sample_aspect_ratio =
+        ist->output_video_filter->inputs[0]->sample_aspect_ratio;
 
     return 0;
 }
@@ -423,9 +422,6 @@ static int configure_filters(AVInputStream *ist, AVOutputStream *ost)
 static void term_exit(void)
 {
     av_log(NULL, AV_LOG_QUIET, "");
-#if HAVE_TERMIOS_H
-    tcsetattr (0, TCSANOW, &oldtty);
-#endif
 }
 
 static volatile int received_sigterm = 0;
@@ -439,26 +435,6 @@ sigterm_handler(int sig)
 
 static void term_init(void)
 {
-#if HAVE_TERMIOS_H
-    struct termios tty;
-
-    tcgetattr (0, &tty);
-    oldtty = tty;
-    atexit(term_exit);
-
-    tty.c_iflag &= ~(IGNBRK|BRKINT|PARMRK|ISTRIP
-                          |INLCR|IGNCR|ICRNL|IXON);
-    tty.c_oflag |= OPOST;
-    tty.c_lflag &= ~(ECHO|ECHONL|ICANON|IEXTEN);
-    tty.c_cflag &= ~(CSIZE|PARENB);
-    tty.c_cflag |= CS8;
-    tty.c_cc[VMIN] = 1;
-    tty.c_cc[VTIME] = 0;
-
-    tcsetattr (0, TCSANOW, &tty);
-    signal(SIGQUIT, sigterm_handler); /* Quit (POSIX).  */
-#endif
-
     signal(SIGINT , sigterm_handler); /* Interrupt (ANSI).  */
     signal(SIGTERM, sigterm_handler); /* Termination (ANSI).  */
 #ifdef SIGXCPU
@@ -469,25 +445,7 @@ static void term_init(void)
 /* read a key without blocking */
 static int read_key(void)
 {
-#if HAVE_TERMIOS_H
-    int n = 1;
-    unsigned char ch;
-    struct timeval tv;
-    fd_set rfds;
-
-    FD_ZERO(&rfds);
-    FD_SET(0, &rfds);
-    tv.tv_sec = 0;
-    tv.tv_usec = 0;
-    n = select(1, &rfds, NULL, NULL, &tv);
-    if (n > 0) {
-        n = read(0, &ch, 1);
-        if (n == 1)
-            return ch;
-
-        return n;
-    }
-#elif HAVE_CONIO_H
+#if HAVE_KBHIT
     if(kbhit())
         return(getch());
 #endif
@@ -1442,6 +1400,14 @@ static void print_report(AVFormatContext **output_files,
     }
 }
 
+static void generate_silence(uint8_t* buf, enum AVSampleFormat sample_fmt, size_t size)
+{
+    int fill_char = 0x00;
+    if (sample_fmt == AV_SAMPLE_FMT_U8)
+        fill_char = 0x80;
+    memset(buf, fill_char, size);
+}
+
 /* pkt = NULL means EOF (needed to flush decoder buffers) */
 static int output_packet(AVInputStream *ist, int ist_index,
                          AVOutputStream **ost_table, int nb_ostreams,
@@ -1784,7 +1750,7 @@ static int output_packet(AVInputStream *ist, int ist_index,
                                     int frame_bytes = enc->frame_size*osize*enc->channels;
                                     if (allocated_audio_buf_size < frame_bytes)
                                         ffmpeg_exit(1);
-                                    memset(audio_buf+fifo_bytes, 0, frame_bytes - fifo_bytes);
+                                    generate_silence(audio_buf+fifo_bytes, enc->sample_fmt, frame_bytes - fifo_bytes);
                                 }
 
                                 ret = avcodec_encode_audio(enc, bit_buffer, bit_buffer_size, (short *)audio_buf);
@@ -1841,7 +1807,7 @@ static void print_sdp(AVFormatContext **avc, int n)
 {
     char sdp[2048];
 
-    avf_sdp_create(avc, n, sdp, sizeof(sdp));
+    av_sdp_create(avc, n, sdp, sizeof(sdp));
     printf("SDP:\n%s\n", sdp);
     fflush(stdout);
 }
@@ -2152,6 +2118,7 @@ static int transcode(AVFormatContext **output_files,
                 codec->sample_rate = icodec->sample_rate;
                 codec->channels = icodec->channels;
                 codec->frame_size = icodec->frame_size;
+                codec->audio_service_type = icodec->audio_service_type;
                 codec->block_align= icodec->block_align;
                 if(codec->block_align == 1 && codec->codec_id == CODEC_ID_MP3)
                     codec->block_align= 0;
@@ -2489,8 +2456,12 @@ static int transcode(AVFormatContext **output_files,
     }
 
     if (!using_stdin && verbose >= 0) {
+#if HAVE_KBHIT
         fprintf(stderr, "Press [q] to stop encoding\n");
-        url_set_interrupt_cb(decode_interrupt_cb);
+#else
+        fprintf(stderr, "Press ctrl-c to stop encoding\n");
+#endif
+        avio_set_interrupt_cb(decode_interrupt_cb);
     }
     term_init();
 
@@ -2823,6 +2794,10 @@ static void opt_frame_aspect_ratio(const char *arg)
         ffmpeg_exit(1);
     }
     frame_aspect_ratio = ar;
+
+    x = vfilters ? strlen(vfilters) : 0;
+    vfilters = av_realloc(vfilters, x+100);
+    snprintf(vfilters+x, x+100, "%csetdar=%f\n", x?',':' ', ar);
 }
 
 static int opt_metadata(const char *opt, const char *arg)
@@ -3761,7 +3736,7 @@ static void opt_output_file(const char *filename)
     /* check filename in case of an image number is expected */
     if (oc->oformat->flags & AVFMT_NEEDNUMBER) {
         if (!av_filename_number_test(oc->filename)) {
-            print_error(oc->filename, AVERROR_NUMEXPECTED);
+            print_error(oc->filename, AVERROR(EINVAL));
             ffmpeg_exit(1);
         }
     }
@@ -3772,7 +3747,7 @@ static void opt_output_file(const char *filename)
             (strchr(filename, ':') == NULL ||
              filename[1] == ':' ||
              av_strstart(filename, "file:", NULL))) {
-            if (url_exist(filename)) {
+            if (avio_check(filename, 0) == 0) {
                 if (!using_stdin) {
                     fprintf(stderr,"File '%s' already exists. Overwrite ? [y/N] ", filename);
                     fflush(stderr);
@@ -3789,7 +3764,7 @@ static void opt_output_file(const char *filename)
         }
 
         /* open the file */
-        if ((err = avio_open(&oc->pb, filename, URL_WRONLY)) < 0) {
+        if ((err = avio_open(&oc->pb, filename, AVIO_FLAG_WRITE)) < 0) {
             print_error(filename, err);
             ffmpeg_exit(1);
         }
@@ -4181,7 +4156,7 @@ static const OptionDef options[] = {
     { "f", HAS_ARG, {(void*)opt_format}, "force format", "fmt" },
     { "i", HAS_ARG, {(void*)opt_input_file}, "input file name", "filename" },
     { "y", OPT_BOOL, {(void*)&file_overwrite}, "overwrite output files" },
-    { "map", HAS_ARG | OPT_EXPERT, {(void*)opt_map}, "set input stream mapping", "file:stream[:syncfile:syncstream]" },
+    { "map", HAS_ARG | OPT_EXPERT, {(void*)opt_map}, "set input stream mapping", "file.stream[:syncfile.syncstream]" },
     { "map_meta_data", HAS_ARG | OPT_EXPERT, {(void*)opt_map_meta_data}, "DEPRECATED set meta data information of outfile from infile",
       "outfile[,metadata]:infile[,metadata]" },
     { "map_metadata", HAS_ARG | OPT_EXPERT, {(void*)opt_map_metadata}, "set metadata information of outfile from infile",
@@ -4245,7 +4220,7 @@ static const OptionDef options[] = {
     { "vcodec", HAS_ARG | OPT_VIDEO, {(void*)opt_video_codec}, "force video codec ('copy' to copy stream)", "codec" },
     { "me_threshold", HAS_ARG | OPT_FUNC2 | OPT_EXPERT | OPT_VIDEO, {(void*)opt_me_threshold}, "motion estimaton threshold",  "threshold" },
     { "sameq", OPT_BOOL | OPT_VIDEO, {(void*)&same_quality},
-      "use same video quality as source (implies VBR)" },
+      "use same quantizer as source (implies VBR)" },
     { "pass", HAS_ARG | OPT_VIDEO, {(void*)&opt_pass}, "select the pass number (1 or 2)", "n" },
     { "passlogfile", HAS_ARG | OPT_STRING | OPT_VIDEO, {(void*)&pass_logfilename_prefix}, "select two pass log file name prefix", "prefix" },
     { "deinterlace", OPT_BOOL | OPT_EXPERT | OPT_VIDEO, {(void*)&do_deinterlace},
@@ -4328,7 +4303,7 @@ int main(int argc, char **argv)
 
 #if HAVE_ISATTY
     if(isatty(STDIN_FILENO))
-        url_set_interrupt_cb(decode_interrupt_cb);
+        avio_set_interrupt_cb(decode_interrupt_cb);
 #endif
 
     init_opts();
