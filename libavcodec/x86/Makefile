@@ -26,6 +26,7 @@ MMX-OBJS-$(CONFIG_AC3DSP)              += x86/ac3dsp_mmx.o
 YASM-OBJS-$(CONFIG_AC3DSP)             += x86/ac3dsp.o
 MMX-OBJS-$(CONFIG_CAVS_DECODER)        += x86/cavsdsp_mmx.o
 MMX-OBJS-$(CONFIG_MPEGAUDIODSP)        += x86/mpegaudiodec_mmx.o
+MMX-OBJS-$(CONFIG_PNG_DECODER)         += x86/png_mmx.o
 MMX-OBJS-$(CONFIG_ENCODERS)            += x86/dsputilenc_mmx.o
 YASM-OBJS-$(CONFIG_ENCODERS)           += x86/dsputilenc_yasm.o
 MMX-OBJS-$(CONFIG_GPL)                 += x86/idct_mmx.o
