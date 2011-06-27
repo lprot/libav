@@ -2321,11 +2321,13 @@ static av_cold void RENAME(sws_init_swScale)(SwsContext *c)
     default: break;
     }
 #if !COMPILE_TEMPLATE_MMX2
+#if 0
     if (c->alpPixBuf) {
         switch (srcFormat) {
         case PIX_FMT_Y400A  : c->alpToYV12 = RENAME(yuy2ToY); break;
         default: break;
         }
     }
+#endif
 #endif /* !COMPILE_TEMPLATE_MMX2 */
 }
