@@ -232,7 +232,7 @@ static void png_filter_row(DSPContext *dsp, uint8_t *dst, int filter_type,
             p = last[i];
             dst[i] = p + src[i];
         }
-        if(bpp > 1 && size > 4) {
+        if(bpp > 1 && bpp <= 4 && size > 4) {
             // would write off the end of the array if we let it process the last pixel with bpp=3
             int w = bpp==4 ? size : size-3;
             dsp->add_png_paeth_prediction(dst+i, src+i, last+i, w-i, bpp);
