@@ -47,7 +47,11 @@ static uint32_t get_generic_seed(void)
     float s = 0.000000000001;
 
     for (i = 0; bits < 64; i++) {
+#ifdef AV_READ_TIME
+	clock_t t= AV_READ_TIME();
+#else
         clock_t t = clock();
+#endif
         if (last_t && fabs(t - last_t) > s || t == (clock_t) -1) {
             if (i < 10000 && s < (1 << 24)) {
                 s += s;
