@@ -999,6 +999,7 @@ CONFIG_LIST="
 THREADS_LIST='
     pthreads
     w32threads
+    ps3threads
 '
 
 ARCH_LIST='
