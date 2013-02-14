@@ -531,6 +531,7 @@ int ff_yuv2rgb_c_init_tables(SwsContext *c, const int inv_table[4],
                              int contrast, int saturation);
 
 void ff_yuv2rgb_init_tables_altivec(SwsContext *c, const int inv_table[4],
+				    int fullRange,
                                     int brightness, int contrast, int saturation);
 void updateMMXDitherTables(SwsContext *c, int dstY, int lumBufIndex, int chrBufIndex,
                            int lastInLumBuf, int lastInChrBuf);

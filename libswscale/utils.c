@@ -797,7 +797,7 @@ int sws_setColorspaceDetails(struct SwsContext *c, const int inv_table[4],
     // FIXME factorize
 
     if (HAVE_ALTIVEC && av_get_cpu_flags() & AV_CPU_FLAG_ALTIVEC)
-        ff_yuv2rgb_init_tables_altivec(c, inv_table, brightness,
+        ff_yuv2rgb_init_tables_altivec(c, inv_table, srcRange, brightness,
                                        contrast, saturation);
     return 0;
 }

@@ -441,13 +441,13 @@ static int altivec_ ## name(SwsContext *c, const unsigned char **in,          \
 }
 
 #define out_abgr(a, b, c, ptr)                                          \
-    vec_mstrgb32(__typeof__(a), ((__typeof__(a)) { 255 }), c, b, a, ptr)
+    vec_mstrgb32(__typeof__(a), vec_splat((vector unsigned char) { 255 }, 0), c, b, a, ptr)
 #define out_bgra(a, b, c, ptr)                                          \
-    vec_mstrgb32(__typeof__(a), c, b, a, ((__typeof__(a)) { 255 }), ptr)
+    vec_mstrgb32(__typeof__(a), c, b, a, vec_splat((vector unsigned char) { 255 }, 0), ptr)
 #define out_rgba(a, b, c, ptr)                                          \
-    vec_mstrgb32(__typeof__(a), a, b, c, ((__typeof__(a)) { 255 }), ptr)
+    vec_mstrgb32(__typeof__(a), a, b, c, vec_splat((vector unsigned char) { 255 }, 0), ptr)
 #define out_argb(a, b, c, ptr)                                          \
-    vec_mstrgb32(__typeof__(a), ((__typeof__(a)) { 255 }), a, b, c, ptr)
+    vec_mstrgb32(__typeof__(a), vec_splat((vector unsigned char) { 255 }, 0), a, b, c, ptr)
 #define out_rgb24(a, b, c, ptr) vec_mstrgb24(a, b, c, ptr)
 #define out_bgr24(a, b, c, ptr) vec_mstbgr24(a, b, c, ptr)
 
@@ -598,6 +598,7 @@ av_cold SwsFunc ff_yuv2rgb_init_altivec(SwsContext *c)
 
 av_cold void ff_yuv2rgb_init_tables_altivec(SwsContext *c,
                                             const int inv_table[4],
+					    int fullRange,
                                             int brightness,
                                             int contrast,
                                             int saturation)
@@ -607,20 +608,54 @@ av_cold void ff_yuv2rgb_init_tables_altivec(SwsContext *c,
         vector signed short vec;
     } buf;
 
-    buf.tmp[0] = ((0xffffLL) * contrast >> 8) >> 9;                               // cy
-    buf.tmp[1] = -256 * brightness;                                               // oy
-    buf.tmp[2] =   (inv_table[0] >> 3) * (contrast >> 16) * (saturation >> 16);   // crv
-    buf.tmp[3] =   (inv_table[1] >> 3) * (contrast >> 16) * (saturation >> 16);   // cbu
-    buf.tmp[4] = -((inv_table[2] >> 1) * (contrast >> 16) * (saturation >> 16));  // cgu
-    buf.tmp[5] = -((inv_table[3] >> 1) * (contrast >> 16) * (saturation >> 16));  // cgv
+    int64_t crv =  inv_table[0];
+    int64_t cbu =  inv_table[1];
+    int64_t cgu = -inv_table[2];
+    int64_t cgv = -inv_table[3];
+    int64_t cy  = 1 << 16;
+    int64_t oy  = 0;
+    int64_t yb  = 0;
 
-    c->CSHIFT = (vector unsigned short) vec_splat_u16(2);
+    if (!fullRange) {
+        cy = (cy * 255) / 219;
+        oy = 16 << 8;
+    } else {
+        crv = (crv * 224) / 255;
+        cbu = (cbu * 224) / 255;
+        cgu = (cgu * 224) / 255;
+        cgv = (cgv * 224) / 255;
+    }
+
+    cy   = (cy  * contrast)              >> 17;
+    crv  = (crv * contrast * saturation) >> 35;
+    cbu  = (cbu * contrast * saturation) >> 35;
+    cgu  = (cgu * contrast * saturation) >> 33;
+    cgv  = (cgv * contrast * saturation) >> 33;
+    oy  -= 256 * brightness;
+
+    cy  = FFMIN(FFMAX(cy,  -32768), 32767);
+    oy  = FFMIN(FFMAX(oy,  -32768), 32767);
+    crv = FFMIN(FFMAX(crv, -32768), 32767);
+    cbu = FFMIN(FFMAX(cbu, -32768), 32767);
+    cgu = FFMIN(FFMAX(cgu, -32768), 32767);
+    cgv = FFMIN(FFMAX(cgv, -32768), 32767);
+
+    buf.tmp[0] = cy;
+    buf.tmp[1] = oy;
+    buf.tmp[2] = crv;
+    buf.tmp[3] = cbu;
+    buf.tmp[4] = cgu;
+    buf.tmp[5] = cgv;
+
     c->CY     = vec_splat((vector signed short) buf.vec, 0);
     c->OY     = vec_splat((vector signed short) buf.vec, 1);
     c->CRV    = vec_splat((vector signed short) buf.vec, 2);
     c->CBU    = vec_splat((vector signed short) buf.vec, 3);
     c->CGU    = vec_splat((vector signed short) buf.vec, 4);
     c->CGV    = vec_splat((vector signed short) buf.vec, 5);
+    c->CSHIFT = vec_splat_u16(2);
+
+
     return;
 }
 
