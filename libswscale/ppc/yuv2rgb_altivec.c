@@ -803,11 +803,6 @@ static av_always_inline void ff_yuv2packedX_altivec(SwsContext *c,
         U  = vec_sra(U, SCL);
         V  = vec_sra(V, SCL);
 
-        Y0 = vec_clip_s16(Y0);
-        Y1 = vec_clip_s16(Y1);
-        U  = vec_clip_s16(U);
-        V  = vec_clip_s16(V);
-
         /* now we have
          * Y0 = y0 y1 y2 y3 y4 y5 y6 y7    Y1 = y8 y9 y10 y11 y12 y13 y14 y15
          * U  = u0 u1 u2 u3 u4 u5 u6 u7    V  = v0 v1 v2 v3 v4 v5 v6 v7
