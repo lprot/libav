@@ -301,6 +301,9 @@ av_cold void ff_sws_init_swScale_altivec(SwsContext *c)
         c->yuv2planeX = yuv2planeX_altivec;
     }
 
+    if(c->srcFormat == AV_PIX_FMT_RGB24)
+	return;
+
     /* The following list of supported dstFormat values should
      * match what's found in the body of ff_yuv2packedX_altivec() */
     if (!(c->flags & (SWS_BITEXACT | SWS_FULL_CHR_H_INT)) && !c->alpPixBuf) {

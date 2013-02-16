@@ -618,7 +618,7 @@ av_cold void ff_yuv2rgb_init_tables_altivec(SwsContext *c,
 
     if (!fullRange) {
         cy = (cy * 255) / 219;
-        oy = 16 << 8;
+        oy = -16;
     } else {
         crv = (crv * 224) / 255;
         cbu = (cbu * 224) / 255;
@@ -631,7 +631,7 @@ av_cold void ff_yuv2rgb_init_tables_altivec(SwsContext *c,
     cbu  = (cbu * contrast * saturation) >> 35;
     cgu  = (cgu * contrast * saturation) >> 33;
     cgv  = (cgv * contrast * saturation) >> 33;
-    oy  -= 256 * brightness;
+    oy  -= brightness;
 
     cy  = FFMIN(FFMAX(cy,  -32768), 32767);
     oy  = FFMIN(FFMAX(oy,  -32768), 32767);
