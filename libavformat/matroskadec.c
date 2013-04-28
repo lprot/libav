@@ -70,6 +70,7 @@ typedef enum {
     EBML_NEST,
     EBML_PASS,
     EBML_STOP,
+    EBML_REF,
     EBML_TYPE_COUNT
 } EbmlType;
 
@@ -96,6 +97,12 @@ typedef struct {
     uint8_t *data;
     int64_t  pos;
 } EbmlBin;
+
+
+typedef struct {
+    int      size;
+    int64_t  pos;
+} EbmlRef;
 
 typedef struct {
     uint64_t version;
@@ -169,7 +176,7 @@ typedef struct {
     uint64_t uid;
     char *filename;
     char *mime;
-    EbmlBin bin;
+    EbmlRef ref;
 
     AVStream *stream;
 } MatroskaAttachment;
@@ -389,7 +396,7 @@ static EbmlSyntax matroska_attachment[] = {
     { MATROSKA_ID_FILEUID,      EBML_UINT, 0, offsetof(MatroskaAttachment, uid) },
     { MATROSKA_ID_FILENAME,     EBML_UTF8, 0, offsetof(MatroskaAttachment, filename) },
     { MATROSKA_ID_FILEMIMETYPE, EBML_STR,  0, offsetof(MatroskaAttachment, mime) },
-    { MATROSKA_ID_FILEDATA,     EBML_BIN,  0, offsetof(MatroskaAttachment, bin) },
+    { MATROSKA_ID_FILEDATA,     EBML_REF,  0, offsetof(MatroskaAttachment, ref) },
     { MATROSKA_ID_FILEDESC,     EBML_NONE },
     { 0 }
 };
@@ -761,6 +768,17 @@ static int ebml_read_binary(AVIOContext *pb, int length, EbmlBin *bin)
 }
 
 /*
+ * Store offset to element
+ * 0 is success, < 0 is failure.
+ */
+static int ebml_read_ref(AVIOContext *pb, int length, EbmlRef *ref)
+{
+    ref->size = length;
+    ref->pos  = avio_tell(pb);
+    return avio_skip(pb, length) < 0 ? AVERROR(EIO) : 0;
+}
+
+/*
  * Read the next element, but only the header. The contents
  * are supposed to be sub-elements which can be read separately.
  * 0 is success, < 0 is failure.
@@ -948,6 +966,8 @@ static int ebml_parse_elem(MatroskaDemuxContext *matroska,
         return ebml_parse_id(matroska, syntax->def.n, id, data);
     case EBML_STOP:
         return 1;
+    case EBML_REF:
+        return ebml_read_ref(pb, length, data);
     default:
         return avio_skip(pb, length) < 0 ? AVERROR(EIO) : 0;
     }
@@ -1879,8 +1899,7 @@ static int matroska_read_header(AVFormatContext *s)
 
     attachments = attachments_list->elem;
     for (j = 0; j < attachments_list->nb_elem; j++) {
-        if (!(attachments[j].filename && attachments[j].mime &&
-              attachments[j].bin.data && attachments[j].bin.size > 0)) {
+        if (!(attachments[j].filename && attachments[j].mime)) {
             av_log(matroska->ctx, AV_LOG_ERROR, "incomplete attachment\n");
         } else {
             AVStream *st = avformat_new_stream(s, NULL);
@@ -1888,14 +1907,10 @@ static int matroska_read_header(AVFormatContext *s)
                 break;
             av_dict_set(&st->metadata, "filename", attachments[j].filename, 0);
             av_dict_set(&st->metadata, "mimetype", attachments[j].mime, 0);
+            st->attached_size = attachments[j].ref.size;
+            st->attached_offset = attachments[j].ref.pos;
             st->codec->codec_id   = AV_CODEC_ID_NONE;
             st->codec->codec_type = AVMEDIA_TYPE_ATTACHMENT;
-            st->codec->extradata  = av_malloc(attachments[j].bin.size);
-            if (!st->codec->extradata)
-                break;
-            st->codec->extradata_size = attachments[j].bin.size;
-            memcpy(st->codec->extradata, attachments[j].bin.data,
-                   attachments[j].bin.size);
 
             for (i = 0; ff_mkv_mime_tags[i].id != AV_CODEC_ID_NONE; i++) {
                 if (!strncmp(ff_mkv_mime_tags[i].str, attachments[j].mime,
