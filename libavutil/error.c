@@ -49,6 +49,9 @@ int av_strerror(int errnum, char *errbuf, size_t errbuf_size)
     } else {
 #if HAVE_STRERROR_R
         ret = strerror_r(AVUNERROR(errnum), errbuf, errbuf_size);
+#ifdef __PPU__
+	ret = 0;
+#endif
 #else
         ret = -1;
 #endif
