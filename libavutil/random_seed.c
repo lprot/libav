@@ -64,7 +64,11 @@ static uint32_t get_generic_seed(void)
     uint64_t last_i = i;
 
     for (;;) {
-        clock_t t = clock();
+#ifdef AV_READ_TIME
+	clock_t t = AV_READ_TIME();
+#else
+         clock_t t = clock();
+#endif
 
         if (last_t == t) {
             buffer[i & 511]++;
