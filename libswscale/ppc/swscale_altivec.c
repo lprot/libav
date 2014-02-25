@@ -303,7 +303,7 @@ av_cold void ff_sws_init_swscale_ppc(SwsContext *c)
         !c->alpPixBuf) {
         c->yuv2planeX = yuv2planeX_altivec;
     }
-
+#if 0
     /* The following list of supported dstFormat values should
      * match what's found in the body of ff_yuv2packedX_altivec() */
     if (!(c->flags & (SWS_BITEXACT | SWS_FULL_CHR_H_INT)) && !c->alpPixBuf) {
@@ -328,5 +328,6 @@ av_cold void ff_sws_init_swscale_ppc(SwsContext *c)
             break;
         }
     }
+#endif
 #endif /* HAVE_ALTIVEC */
 }
