@@ -1698,7 +1698,8 @@ static int handle_packet(MpegTSContext *ts, const uint8_t *packet)
     if (p >= p_end)
         return 0;
 
-    pos = avio_tell(ts->stream->pb);
+    pos = avio_tell(ts->stream->pb) + ts->raw_packet_size - TS_PACKET_SIZE;
+
     MOD_UNLIKELY(ts->pos47, pos, ts->raw_packet_size, ts->pos);
 
     if (tss->type == MPEGTS_SECTION) {
