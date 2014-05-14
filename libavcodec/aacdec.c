@@ -115,6 +115,20 @@ static VLC vlc_spectral[11];
 
 static const char overread_err[] = "Input buffer exhausted before END element found\n";
 
+
+static av_cold void aac_reset(AACContext *ac)
+{
+    int i, type;
+
+    for (i = 0; i < MAX_ELEM_ID; i++) {
+        for (type = 0; type < 4; type++) {
+            if (ac->che[type][i])
+                ff_aac_sbr_ctx_close(&ac->che[type][i]->sbr);
+            av_freep(&ac->che[type][i]);
+        }
+    }
+}
+
 static int count_channels(uint8_t (*layout)[3], int tags)
 {
     int i, sum = 0;
@@ -2667,16 +2681,21 @@ static int parse_adts_frame_header(AACContext *ac, GetBitContext *gb)
         }
         push_output_configuration(ac);
         if (hdr_info.chan_config) {
-            ac->oc[1].m4ac.chan_config = hdr_info.chan_config;
-            if ((ret = set_default_channel_config(ac->avctx,
-                                                  layout_map,
-                                                  &layout_map_tags,
-                                                  hdr_info.chan_config)) < 0)
-                return ret;
-            if ((ret = output_configure(ac, layout_map, layout_map_tags,
-                                        FFMAX(ac->oc[1].status,
-                                              OC_TRIAL_FRAME), 0)) < 0)
-                return ret;
+            if(ac->oc[1].m4ac.chan_config != hdr_info.chan_config) {
+
+                aac_reset(ac);
+                ac->oc[1].m4ac.chan_config = hdr_info.chan_config;
+
+                if ((ret = set_default_channel_config(ac->avctx,
+                                                      layout_map,
+                                                      &layout_map_tags,
+                                                      hdr_info.chan_config)) < 0)
+                    return ret;
+                if ((ret = output_configure(ac, layout_map, layout_map_tags,
+                                            FFMAX(ac->oc[1].status,
+                                                  OC_TRIAL_FRAME), 0)) < 0)
+                    return ret;
+            }
         } else {
             ac->oc[1].m4ac.chan_config = 0;
         }
@@ -2963,16 +2982,7 @@ static int aac_decode_frame(AVCodecContext *avctx, void *data,
 static av_cold int aac_decode_close(AVCodecContext *avctx)
 {
     AACContext *ac = avctx->priv_data;
-    int i, type;
-
-    for (i = 0; i < MAX_ELEM_ID; i++) {
-        for (type = 0; type < 4; type++) {
-            if (ac->che[type][i])
-                ff_aac_sbr_ctx_close(&ac->che[type][i]->sbr);
-            av_freep(&ac->che[type][i]);
-        }
-    }
-
+    aac_reset(ac);
     ff_mdct_end(&ac->mdct);
     ff_mdct_end(&ac->mdct_small);
     ff_mdct_end(&ac->mdct_ld);
