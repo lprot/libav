@@ -2729,10 +2729,12 @@ static int parse_adts_frame_header(AACContext *ac, GetBitContext *gb)
         }
         push_output_configuration(ac);
         if (hdr_info.chan_config) {
-            if(ac->oc[1].m4ac.chan_config != hdr_info.chan_config) {
+            if(ac->oc[1].m4ac.chan_config != hdr_info.chan_config ||
+               ac->oc[1].m4ac.sample_rate != hdr_info.sample_rate) {
 
                 aac_reset(ac);
                 ac->oc[1].m4ac.chan_config = hdr_info.chan_config;
+                ac->oc[1].m4ac.sample_rate = hdr_info.sample_rate;
 
                 if ((ret = set_default_channel_config(ac->avctx,
                                                       layout_map,
