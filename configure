@@ -4363,7 +4363,7 @@ esac
 
 check_func_headers malloc.h _aligned_malloc     && enable aligned_malloc
 check_func  ${malloc_prefix}memalign            && enable memalign
-check_func  ${malloc_prefix}posix_memalign      && enable posix_memalign
+[ $target_os != android ] && check_func  ${malloc_prefix}posix_memalign && enable posix_memalign
 
 check_cpp_condition unistd.h "defined(_POSIX_MONOTONIC_CLOCK)" &&
     check_func_headers time.h clock_gettime || { check_func_headers time.h clock_gettime -lrt && add_extralibs -lrt && LIBRT="-lrt"; }

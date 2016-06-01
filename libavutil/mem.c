@@ -39,10 +39,6 @@
 #include "intreadwrite.h"
 #include "mem.h"
 
-#ifdef __ANDROID__
-int   posix_memalign(void **ptr, size_t align, size_t size);
-#endif
-
 #ifdef MALLOC_PREFIX
 
 #define malloc         AV_JOIN(MALLOC_PREFIX, malloc)
